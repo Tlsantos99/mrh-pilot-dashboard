@@ -73,9 +73,9 @@ export default function AdoptionSection() {
       legend: { position: 'top' as const, labels: { font: { size: 11 }, boxWidth: 12 } },
       tooltip: {
         callbacks: {
-          label: (ctx: { dataset: { label?: string }; parsed: { y: number } }) => {
+          label: (ctx: { dataset: { label?: string }; parsed: { y: number | null } }) => {
             const suffix = ctx.dataset.label === '% Adoção' ? '%' : '';
-            return ` ${ctx.dataset.label}: ${ctx.parsed.y}${suffix}`;
+            return ` ${ctx.dataset.label}: ${ctx.parsed.y ?? ''}${suffix}`;
           },
         },
       },
