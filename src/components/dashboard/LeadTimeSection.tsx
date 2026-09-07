@@ -1,12 +1,12 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { Chart as ChartJS, CategoryScale, LinearScale, LineElement, PointElement, Tooltip, Legend } from 'chart.js';
+import { Chart as ChartJS, CategoryScale, LinearScale, LineElement, LineController, PointElement, Tooltip, Legend } from 'chart.js';
 import { Line } from 'react-chartjs-2';
 import LoadingState from '@/components/ui/LoadingState';
 import EmptyState from '@/components/ui/EmptyState';
 import type { LeadTimeWeekly } from '@/types';
 
-ChartJS.register(CategoryScale, LinearScale, LineElement, PointElement, Tooltip, Legend);
+ChartJS.register(CategoryScale, LinearScale, LineElement, LineController, PointElement, Tooltip, Legend);
 
 export default function LeadTimeSection() {
   const [data, setData] = useState<LeadTimeWeekly[]>([]);
