@@ -18,7 +18,7 @@ export default function AgentTable() {
   if (loading) return <LoadingState />;
   if (!data.length) return <EmptyState title="Sem dados de agentes" />;
 
-  const waves = [...new Set(data.map(d => d.wave_number).filter(Boolean))].sort() as number[];
+  const waves = Array.from(new Set(data.map(d => d.wave_number).filter(Boolean))).sort() as number[];
   const fmt = (n: number | null | undefined, suffix = '') => n !== null && n !== undefined ? `${n}${suffix}` : '—';
 
   return (

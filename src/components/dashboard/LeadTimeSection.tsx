@@ -22,7 +22,7 @@ export default function LeadTimeSection() {
   if (loading) return <LoadingState />;
   if (!data.length) return <EmptyState title="Sem dados de lead time" message="Disponível após o encerramento das ocorrências." />;
 
-  const weeks = [...new Set(data.map(d => d.week_label))];
+  const weeks = Array.from(new Set(data.map(d => d.week_label)));
   const gdNovo = weeks.map(w => data.find(d => d.week_label === w && d.expertise_type === 'Gestão Direta' && d.channel === 'Formulário Novo')?.avg_lt_total ?? null);
   const gdAntigo = weeks.map(w => data.find(d => d.week_label === w && d.expertise_type === 'Gestão Direta' && d.channel === 'Formulário Antigo')?.avg_lt_total ?? null);
   const peritagemNovo = weeks.map(w => data.find(d => d.week_label === w && d.expertise_type === 'Peritagem' && d.channel === 'Formulário Novo')?.avg_lt_total ?? null);

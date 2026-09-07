@@ -24,7 +24,7 @@ export default function GDSection({ gdRateNovo, gdRateAntigo }: Props) {
   if (loading) return <LoadingState />;
   if (!data.length) return <EmptyState title="Sem dados GD" />;
 
-  const weeks = [...new Set(data.map(d => d.week_label))];
+  const weeks = Array.from(new Set(data.map(d => d.week_label)));
   const novo = weeks.map(w => data.find(d => d.week_label === w && d.channel === 'Formulário Novo'));
   const antigo = weeks.map(w => data.find(d => d.week_label === w && d.channel === 'Formulário Antigo'));
 
