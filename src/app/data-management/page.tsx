@@ -23,6 +23,8 @@ interface ProcessResult {
   rowsInserted?: number;
   rowsRejected?: number;
   message?: string;
+  error?: string;
+  detail?: string;
 }
 
 const FILE_TYPE_LABELS: Record<FileType, string> = {
@@ -285,15 +287,11 @@ export default function DataManagementPage() {
               ))}
             </div>
           )}
-          {(result.message || (result as Record<string, unknown>).error) && (
-            <p className="text-sm text-gray-500 mt-2">
-              {result.message ?? String((result as Record<string, unknown>).error ?? '')}
-            </p>
+          {(result.message || result.error) && (
+            <p className="text-sm text-gray-500 mt-2">{result.message ?? result.error}</p>
           )}
-          {(result as Record<string, unknown>).detail && (
-            <p className="text-xs text-red-500 mt-1 font-mono">
-              {String((result as Record<string, unknown>).detail)}
-            </p>
+          {result.detail && (
+            <p className="text-xs text-red-500 mt-1 font-mono">{result.detail}</p>
           )}
         </div>
       )}
