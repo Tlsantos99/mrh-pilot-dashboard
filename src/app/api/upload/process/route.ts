@@ -97,7 +97,10 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (uploadErr || !uploadRecord) {
-      return NextResponse.json({ error: 'Erro ao criar registo de upload' }, { status: 500 });
+      return NextResponse.json({
+        error: 'Erro ao criar registo de upload',
+        detail: uploadErr?.message ?? 'uploadRecord null',
+      }, { status: 500 });
     }
 
     const uploadId = uploadRecord.id;
