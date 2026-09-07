@@ -178,7 +178,11 @@ export async function POST(req: NextRequest) {
 
     // If agentes, sync to agents reference table
     if (fileType === 'agentes') {
-      await syncAgentsFromStaging();
+      try {
+        await syncAgentsFromStaging();
+      } catch (syncErr) {
+        console.error('Agent sync error (non-blocking):', syncErr);
+      }
     }
 
     // Update upload history
