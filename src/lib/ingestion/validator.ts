@@ -1,4 +1,4 @@
-import type { FileType } from '@/types';
+﻿import type { FileType } from '@/types';
 import { getRequiredColumns } from './detector';
 
 export interface ValidationSummary {
@@ -7,6 +7,10 @@ export interface ValidationSummary {
   warnings: string[];
   rowCount: number;
   missingColumns: string[];
+}
+
+function stripAccents(s: string): string {
+  return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 }
 
 export function validateFileStructure(
@@ -18,14 +22,13 @@ export function validateFileStructure(
   const warnings: string[] = [];
   const normalizedHeaders = headers.map(h => h?.toString().trim());
 
-  // Check required columns
   const required = getRequiredColumns(fileType);
   const missingColumns = required.filter(
-    col => !normalizedHeaders.some(h => h === col || h?.toLowerCase() === col.toLowerCase())
+    col => !normalizedHeaders.some(h => stripAccents(h) === stripAccents(col))
   );
 
   if (missingColumns.length > 0) {
-    errors.push(`Colunas obrigatórias em falta: ${missingColumns.join(', ')}`);
+    errors.push(`Colunas obrigatorias em falta: ${missingColumns.join(', ')}`);
   }
 
   if (rows.length === 0) {
@@ -33,20 +36,19 @@ export function validateFileStructure(
   }
 
   if (rows.length > 500000) {
-    warnings.push(`Ficheiro muito grande (${rows.length} linhas) — o processamento pode demorar`);
+    warnings.push(`Ficheiro muito grande (${rows.length} linhas) -- o processamento pode demorar`);
   }
 
-  // Type-specific validations
   if (fileType === 'global') {
     const sample = rows.slice(0, 100);
-    const emptyOccurrence = sample.filter(r => !r['Ocorrência'] && !r['Ocorrencia']).length;
+    const emptyOccurrence = sample.filter(r => !r['Ocorrencia']).length;
     if (emptyOccurrence > sample.length * 0.5) {
-      warnings.push('Mais de 50% das amostras sem campo Ocorrência');
+      warnings.push('Mais de 50% das amostras sem campo Ocorrencia');
     }
   }
 
   if (fileType === 'chamadas') {
-    warnings.push('Verificar que o header está na linha 4 do ficheiro original');
+    warnings.push('Verificar que o header esta na linha 4 do ficheiro original');
   }
 
   return {
