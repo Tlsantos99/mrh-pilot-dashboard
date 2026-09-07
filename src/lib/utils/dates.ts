@@ -129,7 +129,7 @@ export function parseSimNao(raw: string | null | undefined): boolean | null {
 /**
  * Parse numeric string, treating sentinel values and empty as null.
  */
-export function parseNumeric(raw: string | number | null | undefined): number | null {
+export function parseNumeric(raw: unknown): number | null {
   if (raw === null || raw === undefined || raw === '') return null;
   const n = typeof raw === 'number' ? raw : parseFloat(String(raw).replace(',', '.'));
   if (isNaN(n)) return null;
