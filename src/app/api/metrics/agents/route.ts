@@ -19,7 +19,8 @@ export async function GET(req: NextRequest) {
       .select('asf_aggregator,wave_number,wave_name,channel,has_expertise,lt_total,closing_date')
       .eq('eligible_for_pilot', true)
       .eq('is_event', false)
-      .eq('branch', 'Riscos Múltiplos-Habitação');
+      .eq('branch', 'Riscos Múltiplos-Habitação')
+      .limit(5000);
     q = applyFilters(q, filters);
 
     const { data: rows, error } = await q;
@@ -47,7 +48,13 @@ export async function GET(req: NextRequest) {
     }
 
     const data = Array.from(map.values())
-      .sort((a, b) => (a.wave_number ?? 99) - (b.wave_number ?? 99) || a.asf_aggregator.localeCompare(b.asf_aggregator))
+      .sort((a, b) => {
+        if ((a.wave_number ?? 99) !== (b.wave_number ?? 99)) return (a.wave_number ?? 99) - (b.wave_number ?? 99);
+        // Within a wave: sort by adoption_rate descending (highest first), nulls last
+        const ar = a.novo + a.antigo > 0 ? a.novo / (a.novo + a.antigo) : -1;
+        const br = b.novo + b.antigo > 0 ? b.novo / (b.novo + b.antigo) : -1;
+        return br - ar;
+      })
       .map(w => ({
         agent_code: w.asf_aggregator,
         agent_name: w.asf_aggregator,

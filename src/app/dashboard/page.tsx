@@ -162,7 +162,13 @@ function DashboardContent() {
           <KPICard label="LT Peritagem" value={fmt(kpis?.avg_lt_expertise, ' dias')} color="pink" size="sm" />
           <KPICard label="LT Abertura→Aceitação" value={fmt(kpis?.avg_lt_opening_acceptance, ' dias')} color="orange" size="sm" />
         </div>
-        <LeadTimeSection filters={filters} />
+        <LeadTimeSection
+          filters={filters}
+          gdCount={kpis?.total_gd}
+          peritagemCount={kpis?.total_peritagem}
+          closedGdCount={kpis?.closed_gd_count}
+          closedPeritagemCount={kpis?.closed_peritagem_count}
+        />
       </div>
 
       {/* Section 4 — Por Mediadora */}

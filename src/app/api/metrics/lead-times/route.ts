@@ -21,7 +21,8 @@ export async function GET(req: NextRequest) {
       .eq('is_event', false)
       .eq('branch', 'Riscos Múltiplos-Habitação')
       .not('closing_date', 'is', null)
-      .not('opening_week_label', 'is', null);
+      .not('opening_week_label', 'is', null)
+      .limit(5000);
     q = applyFilters(q, filters);
 
     const { data: rows, error } = await q;

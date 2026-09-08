@@ -125,10 +125,14 @@ export interface SummaryKPIs {
   gd_rate_global: number;
   gd_rate_novo: number;
   gd_rate_antigo: number;
-  avg_lt_total: number;
-  avg_lt_gd: number;
-  avg_lt_expertise: number;
-  avg_lt_opening_acceptance: number;
+  total_gd: number;
+  total_peritagem: number;
+  closed_gd_count: number;
+  closed_peritagem_count: number;
+  avg_lt_total: number | null;
+  avg_lt_gd: number | null;
+  avg_lt_expertise: number | null;
+  avg_lt_opening_acceptance: number | null;
 }
 
 export interface DataQualityIssue {
@@ -151,3 +155,4 @@ export interface DashboardFilters {
   expertise?: string;
   max_date?: string;
 }
+

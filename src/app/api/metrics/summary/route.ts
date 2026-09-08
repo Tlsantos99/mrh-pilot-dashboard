@@ -19,7 +19,8 @@ export async function GET(req: NextRequest) {
       .select('channel,has_expertise,lt_total,lt_opening_acceptance,closing_date,acceptance_date')
       .eq('eligible_for_pilot', true)
       .eq('is_event', false)
-      .eq('branch', 'Riscos Múltiplos-Habitação');
+      .eq('branch', 'Riscos Múltiplos-Habitação')
+      .limit(5000);
     q = applyFilters(q, filters);
 
     const [{ data: rows, error }, { data: refresh }] = await Promise.all([
@@ -49,6 +50,11 @@ export async function GET(req: NextRequest) {
     const closed = r.filter(x => x.closing_date && x.lt_total != null) as { lt_total: number; has_expertise: boolean }[];
     const with_acc = r.filter(x => x.acceptance_date && x.lt_opening_acceptance != null) as { lt_opening_acceptance: number }[];
 
+    const gd_rows = r.filter(x => !x.has_expertise);
+    const peritagem_rows = r.filter(x => x.has_expertise);
+    const closed_gd = closed.filter(x => !x.has_expertise);
+    const closed_peritagem = closed.filter(x => x.has_expertise);
+
     const kpis = {
       total_eligible,
       total_novo,
@@ -58,9 +64,13 @@ export async function GET(req: NextRequest) {
       gd_rate_global,
       gd_rate_novo,
       gd_rate_antigo,
+      total_gd: gd_rows.length,
+      total_peritagem: peritagem_rows.length,
+      closed_gd_count: closed_gd.length,
+      closed_peritagem_count: closed_peritagem.length,
       avg_lt_total: avg(closed.map(x => x.lt_total)),
-      avg_lt_gd: avg(closed.filter(x => !x.has_expertise).map(x => x.lt_total)),
-      avg_lt_expertise: avg(closed.filter(x => x.has_expertise).map(x => x.lt_total)),
+      avg_lt_gd: avg(closed_gd.map(x => x.lt_total)),
+      avg_lt_expertise: avg(closed_peritagem.map(x => x.lt_total)),
       avg_lt_opening_acceptance: avg(with_acc.map(x => x.lt_opening_acceptance)),
     };
 
