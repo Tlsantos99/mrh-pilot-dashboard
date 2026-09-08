@@ -146,8 +146,7 @@ export interface PendingOccurrence {
 }
 
 export interface DashboardFilters {
-  waves: number[];
-  channels: string[];
-  hasExpertise: string;
-  weekRange: [number, number] | null;
+  wave?: string;
+  channel?: string;
+  expertise?: string;
 }

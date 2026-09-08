@@ -2,18 +2,22 @@
 import { useEffect, useState } from 'react';
 import LoadingState from '@/components/ui/LoadingState';
 import EmptyState from '@/components/ui/EmptyState';
-import type { PendingOccurrence } from '@/types';
+import { buildQS } from '@/lib/utils/filters';
+import type { PendingOccurrence, DashboardFilters } from '@/types';
 
-export default function QueueSection() {
+interface Props { filters?: DashboardFilters }
+
+export default function QueueSection({ filters = {} }: Props) {
   const [data, setData] = useState<PendingOccurrence[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch('/api/metrics/queue')
+    setLoading(true);
+    fetch(`/api/metrics/queue${buildQS(filters)}`)
       .then(r => r.json())
       .then(({ data: d }) => { setData(d ?? []); setLoading(false); })
       .catch(() => setLoading(false));
-  }, []);
+  }, [filters.wave, filters.channel, filters.expertise]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (loading) return <LoadingState />;
   if (!data.length) return <EmptyState title="Sem ocorrências pendentes" message="Todas as ocorrências elegíveis têm data de aceitação." />;

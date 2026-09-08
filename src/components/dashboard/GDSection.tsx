@@ -4,22 +4,24 @@ import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, BarController
 import { Chart } from 'react-chartjs-2';
 import LoadingState from '@/components/ui/LoadingState';
 import EmptyState from '@/components/ui/EmptyState';
-import type { GDWeekly } from '@/types';
+import { buildQS } from '@/lib/utils/filters';
+import type { GDWeekly, DashboardFilters } from '@/types';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, BarController, LineElement, LineController, PointElement, Tooltip, Legend);
 
-interface Props { gdRateNovo?: number; gdRateAntigo?: number; }
+interface Props { gdRateNovo?: number; gdRateAntigo?: number; filters?: DashboardFilters }
 
-export default function GDSection({ gdRateNovo, gdRateAntigo }: Props) {
+export default function GDSection({ gdRateNovo, gdRateAntigo, filters = {} }: Props) {
   const [data, setData] = useState<GDWeekly[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch('/api/metrics/gd')
+    setLoading(true);
+    fetch(`/api/metrics/gd${buildQS(filters)}`)
       .then(r => r.json())
       .then(({ data: d }) => { setData(d ?? []); setLoading(false); })
       .catch(() => setLoading(false));
-  }, []);
+  }, [filters.wave, filters.channel, filters.expertise]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (loading) return <LoadingState />;
   if (!data.length) return <EmptyState title="Sem dados GD" />;

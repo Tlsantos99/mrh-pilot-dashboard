@@ -2,21 +2,25 @@
 import { useEffect, useState } from 'react';
 import LoadingState from '@/components/ui/LoadingState';
 import EmptyState from '@/components/ui/EmptyState';
-import type { AgentPerformance } from '@/types';
+import { buildQS } from '@/lib/utils/filters';
+import type { AgentPerformance, DashboardFilters } from '@/types';
 
-export default function AgentTable() {
+interface Props { filters?: DashboardFilters }
+
+export default function AgentTable({ filters = {} }: Props) {
   const [data, setData] = useState<AgentPerformance[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch('/api/metrics/agents')
+    setLoading(true);
+    fetch(`/api/metrics/agents${buildQS(filters)}`)
       .then(r => r.json())
       .then(({ data: d }) => { setData(d ?? []); setLoading(false); })
       .catch(() => setLoading(false));
-  }, []);
+  }, [filters.wave, filters.channel, filters.expertise]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (loading) return <LoadingState />;
-  if (!data.length) return <EmptyState title="Sem dados de agentes" />;
+  if (!data.length) return <EmptyState title="Sem dados de mediadores" />;
 
   const waves = Array.from(new Set(data.map(d => d.wave_number).filter(Boolean))).sort() as number[];
   const fmt = (n: number | null | undefined, suffix = '') => n !== null && n !== undefined ? `${n}${suffix}` : '—';
@@ -34,17 +38,23 @@ export default function AgentTable() {
         const totalAdoption = (totals.novo + totals.antigo) > 0
           ? Math.round(totals.novo / (totals.novo + totals.antigo) * 1000) / 10
           : null;
+        const waveName = agents[0]?.wave_name ?? `Wave ${wave}`;
 
         return (
           <div key={wave}>
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-sm font-semibold text-[#00305E]">Wave {wave}</span>
-              <span className="text-xs text-gray-400">({agents.length} agentes)</span>
+            <div className="flex items-center gap-3 mb-2">
+              <span className="text-sm font-semibold text-[#00305E]">{waveName}</span>
+              <span className="text-xs text-gray-400">({agents.length} mediadoras)</span>
+              {totalAdoption !== null && (
+                <span className="ml-auto text-xs font-medium text-teal-700 bg-teal-50 px-2 py-0.5 rounded-full">
+                  Adoção: {totalAdoption}%
+                </span>
+              )}
             </div>
             <table className="w-full text-xs">
               <thead>
                 <tr className="bg-gray-50 text-gray-500 text-left">
-                  <th className="px-3 py-2 font-medium rounded-l">Agente</th>
+                  <th className="px-3 py-2 font-medium rounded-l">Mediadora</th>
                   <th className="px-3 py-2 font-medium text-right">Novo</th>
                   <th className="px-3 py-2 font-medium text-right">Antigo</th>
                   <th className="px-3 py-2 font-medium text-right">Email</th>
@@ -60,10 +70,12 @@ export default function AgentTable() {
                   const warn = a.novo < a.antigo;
                   return (
                     <tr key={a.agent_code} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-3 py-2 font-medium text-gray-700 flex items-center gap-1">
-                        {good && <span title="Adoção ≥ 50%">✓</span>}
-                        {warn && !good && <span title="Novo < Antigo" className="text-amber-500">⚠</span>}
-                        <span>{a.agent_name ?? a.agent_code}</span>
+                      <td className="px-3 py-2 font-medium text-gray-700">
+                        <div className="flex items-center gap-1">
+                          {good && <span className="text-teal-600" title="Adoção ≥ 50%">✓</span>}
+                          {warn && !good && <span className="text-amber-500" title="Novo < Antigo">⚠</span>}
+                          <span>{a.agent_name ?? a.agent_code}</span>
+                        </div>
                       </td>
                       <td className="px-3 py-2 text-right text-[#00B4A0] font-medium">{a.novo}</td>
                       <td className="px-3 py-2 text-right text-[#E8007D]">{a.antigo}</td>
@@ -80,7 +92,7 @@ export default function AgentTable() {
                   );
                 })}
                 <tr className="bg-blue-50 font-semibold text-[#00305E] text-xs">
-                  <td className="px-3 py-2">Total Wave {wave}</td>
+                  <td className="px-3 py-2">Total {waveName}</td>
                   <td className="px-3 py-2 text-right">{totals.novo}</td>
                   <td className="px-3 py-2 text-right">{totals.antigo}</td>
                   <td className="px-3 py-2 text-right">{totals.email}</td>

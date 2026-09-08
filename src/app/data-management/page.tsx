@@ -106,7 +106,7 @@ export default function DataManagementPage() {
   };
 
   return (
-    <div className="space-y-8 max-w-3xl">
+    <div className="space-y-8 max-w-3xl px-4 sm:px-6 py-6">
       <div>
         <h1 className="text-2xl font-bold text-[#00305E]">Gestão de Dados</h1>
         <p className="text-sm text-gray-500 mt-0.5">Upload e validação dos ficheiros de input</p>

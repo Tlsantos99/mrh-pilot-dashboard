@@ -4,20 +4,24 @@ import { Chart as ChartJS, CategoryScale, LinearScale, LineElement, LineControll
 import { Line } from 'react-chartjs-2';
 import LoadingState from '@/components/ui/LoadingState';
 import EmptyState from '@/components/ui/EmptyState';
-import type { LeadTimeWeekly } from '@/types';
+import { buildQS } from '@/lib/utils/filters';
+import type { LeadTimeWeekly, DashboardFilters } from '@/types';
 
 ChartJS.register(CategoryScale, LinearScale, LineElement, LineController, PointElement, Tooltip, Legend);
 
-export default function LeadTimeSection() {
+interface Props { filters?: DashboardFilters }
+
+export default function LeadTimeSection({ filters = {} }: Props) {
   const [data, setData] = useState<LeadTimeWeekly[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch('/api/metrics/lead-times')
+    setLoading(true);
+    fetch(`/api/metrics/lead-times${buildQS(filters)}`)
       .then(r => r.json())
       .then(({ data: d }) => { setData(d ?? []); setLoading(false); })
       .catch(() => setLoading(false));
-  }, []);
+  }, [filters.wave, filters.channel, filters.expertise]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (loading) return <LoadingState />;
   if (!data.length) return <EmptyState title="Sem dados de lead time" message="Disponível após o encerramento das ocorrências." />;

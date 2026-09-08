@@ -4,20 +4,24 @@ import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, BarController
 import { Chart } from 'react-chartjs-2';
 import LoadingState from '@/components/ui/LoadingState';
 import EmptyState from '@/components/ui/EmptyState';
-import type { AdoptionWeekly } from '@/types';
+import { buildQS } from '@/lib/utils/filters';
+import type { AdoptionWeekly, DashboardFilters } from '@/types';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, BarController, LineElement, LineController, PointElement, Title, Tooltip, Legend);
 
-export default function AdoptionSection() {
+interface Props { filters?: DashboardFilters }
+
+export default function AdoptionSection({ filters = {} }: Props) {
   const [data, setData] = useState<AdoptionWeekly[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch('/api/metrics/adoption')
+    setLoading(true);
+    fetch(`/api/metrics/adoption${buildQS(filters)}`)
       .then(r => r.json())
       .then(({ data: d }) => { setData(d ?? []); setLoading(false); })
       .catch(() => setLoading(false));
-  }, []);
+  }, [filters.wave, filters.channel, filters.expertise]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (loading) return <LoadingState />;
   if (!data.length) return <EmptyState title="Sem dados de adoção" />;
@@ -95,29 +99,5 @@ export default function AdoptionSection() {
     },
   };
 
-  // Volume cards
-  const totalNovo = data.reduce((s, d) => s + d.novo, 0);
-  const totalAntigo = data.reduce((s, d) => s + d.antigo, 0);
-  const totalEmail = data.reduce((s, d) => s + d.email_outro, 0);
-  const totalAll = totalNovo + totalAntigo + totalEmail;
-  const pct = (n: number) => totalAll > 0 ? Math.round((n / totalAll) * 10) / 10 * 10 : 0;
-
-  return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-3 gap-3">
-        {[
-          { label: 'Formulário Novo', val: totalNovo, color: 'text-[#00B4A0]', bg: 'bg-teal-50' },
-          { label: 'Formulário Antigo', val: totalAntigo, color: 'text-[#E8007D]', bg: 'bg-pink-50' },
-          { label: 'Email/Outro', val: totalEmail, color: 'text-gray-500', bg: 'bg-gray-50' },
-        ].map(({ label, val, color, bg }) => (
-          <div key={label} className={`${bg} rounded-lg p-3 text-center`}>
-            <p className="text-xs text-gray-500">{label}</p>
-            <p className={`text-2xl font-bold ${color}`}>{val}</p>
-            <p className="text-xs text-gray-400">{pct(val).toFixed(1)}% do total</p>
-          </div>
-        ))}
-      </div>
-      <Chart type="bar" data={chartData} options={options} height={80} />
-    </div>
-  );
+  return <Chart type="bar" data={chartData} options={options} height={80} />;
 }
