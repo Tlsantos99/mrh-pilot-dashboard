@@ -146,7 +146,7 @@ export function isWithinBusinessHours(timeStr: string | null | undefined): boole
   const hours = parseInt(match[1]);
   const minutes = parseInt(match[2]);
   const totalMinutes = hours * 60 + minutes;
-  const start = 8 * 60 + 30;  // 08:30
-  const end = 16 * 60 + 30;   // 16:30
+  const start = 8 * 60 + 45;  // 08:45
+  const end = 16 * 60 + 45;   // 16:45
   return totalMinutes >= start && totalMinutes <= end;
 }

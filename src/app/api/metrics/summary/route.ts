@@ -18,7 +18,8 @@ export async function GET(req: NextRequest) {
       .from('occurrences')
       .select('channel,has_expertise,lt_total,lt_opening_acceptance,closing_date,acceptance_date')
       .eq('eligible_for_pilot', true)
-      .eq('is_event', false);
+      .eq('is_event', false)
+      .eq('branch', 'Riscos Múltiplos-Habitação');
     q = applyFilters(q, filters);
 
     const [{ data: rows, error }, { data: refresh }] = await Promise.all([

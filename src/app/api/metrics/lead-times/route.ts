@@ -19,6 +19,7 @@ export async function GET(req: NextRequest) {
       .select('opening_year,opening_week,opening_week_label,channel,has_expertise,lt_total,lt_opening_acceptance,closing_date')
       .eq('eligible_for_pilot', true)
       .eq('is_event', false)
+      .eq('branch', 'Riscos Múltiplos-Habitação')
       .not('closing_date', 'is', null)
       .not('opening_week_label', 'is', null);
     q = applyFilters(q, filters);

@@ -18,7 +18,8 @@ export async function GET(req: NextRequest) {
       .from('occurrences')
       .select('asf_aggregator,wave_number,wave_name,channel,has_expertise,lt_total,closing_date')
       .eq('eligible_for_pilot', true)
-      .eq('is_event', false);
+      .eq('is_event', false)
+      .eq('branch', 'Riscos Múltiplos-Habitação');
     q = applyFilters(q, filters);
 
     const { data: rows, error } = await q;

@@ -14,6 +14,7 @@ export async function GET(req: NextRequest) {
       .select('opening_year,opening_week,opening_week_label,channel,has_expertise')
       .eq('eligible_for_pilot', true)
       .eq('is_event', false)
+      .eq('branch', 'Riscos Múltiplos-Habitação')
       .not('opening_week_label', 'is', null)
       .in('channel', ['Formulário Novo', 'Formulário Antigo']);
     q = applyFilters(q, filters);

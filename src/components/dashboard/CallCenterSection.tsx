@@ -42,7 +42,7 @@ export default function CallCenterSection() {
       {totals.outsideHours > 0 && (
         <div className="mt-3 bg-amber-50 border border-amber-200 rounded-lg p-3">
           <p className="text-xs font-medium text-amber-700">
-            ⚠ {totals.outsideHours} chamadas fora do horário 08:30–16:30
+            ⚠ {totals.outsideHours} chamadas fora do horário 08:45–16:45
           </p>
         </div>
       )}

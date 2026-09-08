@@ -149,4 +149,5 @@ export interface DashboardFilters {
   wave?: string;
   channel?: string;
   expertise?: string;
+  max_date?: string;
 }
