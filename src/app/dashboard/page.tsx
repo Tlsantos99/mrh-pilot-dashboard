@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import KPICard from '@/components/ui/KPICard';
 import SectionHeader from '@/components/ui/SectionHeader';
@@ -17,6 +17,14 @@ import type { SummaryKPIs, DashboardFilters } from '@/types';
 interface LastUpdate { [key: string]: string }
 
 export default function DashboardPage() {
+  return (
+    <Suspense fallback={<LoadingState message="A carregar dashboard..." />}>
+      <DashboardContent />
+    </Suspense>
+  );
+}
+
+function DashboardContent() {
   const sp = useSearchParams();
   const wave = sp.get('wave') ?? undefined;
   const channel = sp.get('channel') ?? undefined;
