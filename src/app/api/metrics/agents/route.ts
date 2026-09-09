@@ -14,17 +14,19 @@ export async function GET(req: NextRequest) {
     const filters = readFilters(new URL(req.url).searchParams);
     const supabase = createServerClient();
 
-    let q = supabase
-      .from('occurrences')
-      .select('asf_aggregator,wave_number,wave_name,channel,has_expertise,lt_total,closing_date')
-      .eq('eligible_for_pilot', true)
-      .eq('is_event', false)
-      .eq('branch', 'Riscos Múltiplos-Habitação')
-      .limit(5000);
-    q = applyFilters(q, filters);
+    const SEL = 'asf_aggregator,wave_number,wave_name,channel,has_expertise,lt_total,closing_date';
+    const makeQ = () =>
+      supabase.from('occurrences').select(SEL)
+        .eq('eligible_for_pilot', true).eq('is_event', false)
+        .eq('branch', 'Riscos Múltiplos-Habitação');
 
-    const { data: rows, error } = await q;
-    if (error) throw error;
+    const [{ data: p1, error: e1 }, { data: p2, error: e2 }] = await Promise.all([
+      applyFilters(makeQ(), filters).range(0, 999),
+      applyFilters(makeQ(), filters).range(1000, 1999),
+    ]);
+    if (e1) throw e1;
+    if (e2) throw e2;
+    const rows = [...(p1 ?? []), ...(p2 ?? [])];
 
     type Acc = {
       asf_aggregator: string; wave_number: number; wave_name: string;

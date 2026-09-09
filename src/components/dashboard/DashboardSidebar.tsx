@@ -34,6 +34,12 @@ const EXPERTISE = [
   { value: 'true', label: 'Com Peritagem' },
 ];
 
+const STATUS = [
+  { value: '', label: 'Todos' },
+  { value: 'open', label: 'Em Aberto' },
+  { value: 'closed', label: 'Encerrados' },
+];
+
 export default function DashboardSidebar() {
   const router = useRouter();
   const pathname = usePathname();
@@ -42,7 +48,8 @@ export default function DashboardSidebar() {
   const wave = sp.get('wave') ?? '';
   const channel = sp.get('channel') ?? '';
   const expertise = sp.get('expertise') ?? '';
-  const hasFilters = wave || channel || expertise;
+  const status = sp.get('status') ?? '';
+  const hasFilters = wave || channel || expertise || status;
 
   const update = useCallback((key: string, value: string) => {
     const p = new URLSearchParams(sp.toString());
@@ -93,6 +100,7 @@ export default function DashboardSidebar() {
         <FilterGroup label="Wave" options={WAVES} value={wave} onChange={v => update('wave', v)} />
         <FilterGroup label="Canal de Entrada" options={CHANNELS} value={channel} onChange={v => update('channel', v)} />
         <FilterGroup label="Peritagem" options={EXPERTISE} value={expertise} onChange={v => update('expertise', v)} />
+        <FilterGroup label="Estado" options={STATUS} value={status} onChange={v => update('status', v)} />
 
         {hasFilters && (
           <button

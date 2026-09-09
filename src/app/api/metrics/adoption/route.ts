@@ -9,18 +9,20 @@ export async function GET(req: NextRequest) {
     const filters = readFilters(new URL(req.url).searchParams);
     const supabase = createServerClient();
 
-    let q = supabase
-      .from('occurrences')
-      .select('opening_year,opening_week,opening_week_label,channel')
-      .eq('eligible_for_pilot', true)
-      .eq('is_event', false)
-      .eq('branch', 'Riscos Múltiplos-Habitação')
-      .not('opening_week_label', 'is', null)
-      .limit(5000);
-    q = applyFilters(q, filters);
+    const SEL = 'opening_year,opening_week,opening_week_label,channel';
+    const makeQ = () =>
+      supabase.from('occurrences').select(SEL)
+        .eq('eligible_for_pilot', true).eq('is_event', false)
+        .eq('branch', 'Riscos Múltiplos-Habitação')
+        .not('opening_week_label', 'is', null);
 
-    const { data: rows, error } = await q;
-    if (error) throw error;
+    const [{ data: p1, error: e1 }, { data: p2, error: e2 }] = await Promise.all([
+      applyFilters(makeQ(), filters).range(0, 999),
+      applyFilters(makeQ(), filters).range(1000, 1999),
+    ]);
+    if (e1) throw e1;
+    if (e2) throw e2;
+    const rows = [...(p1 ?? []), ...(p2 ?? [])];
 
     type W = { year: number; week: number; week_label: string; novo: number; antigo: number; email_outro: number; total: number };
     const map = new Map<string, W>();

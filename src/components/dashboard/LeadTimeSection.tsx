@@ -15,13 +15,14 @@ ChartJS.register(CategoryScale, LinearScale, BarElement, BarController, LineElem
 
 interface Props {
   filters?: DashboardFilters;
-  gdCount?: number;
-  peritagemCount?: number;
-  closedGdCount?: number;
-  closedPeritagemCount?: number;
+  // Base counts (wave/channel filtered, NOT expertise filtered) — always shows full distribution
+  gdCountBase?: number;
+  peritagemCountBase?: number;
+  closedGdCountBase?: number;
+  closedPeritagemCountBase?: number;
 }
 
-export default function LeadTimeSection({ filters = {}, gdCount, peritagemCount, closedGdCount, closedPeritagemCount }: Props) {
+export default function LeadTimeSection({ filters = {}, gdCountBase, peritagemCountBase, closedGdCountBase, closedPeritagemCountBase }: Props) {
   const [ltData, setLtData] = useState<LeadTimeWeekly[]>([]);
   const [adoptionData, setAdoptionData] = useState<AdoptionWeekly[]>([]);
   const [loading, setLoading] = useState(true);
@@ -84,31 +85,29 @@ export default function LeadTimeSection({ filters = {}, gdCount, peritagemCount,
   });
 
   const datasets = [];
-  // Bars (only when not filtering to peritagem-only)
-  if (!isPeritagemFilter) {
-    datasets.push({
-      type: 'bar' as const,
-      label: 'Form. Novo',
-      data: novoBar,
-      backgroundColor: '#00B4A055',
-      borderColor: '#00B4A0',
-      borderWidth: 1,
-      borderRadius: 3,
-      yAxisID: 'y2',
-      order: 3,
-    });
-    datasets.push({
-      type: 'bar' as const,
-      label: 'Form. Antigo',
-      data: antigoBar,
-      backgroundColor: '#E8007D44',
-      borderColor: '#E8007D',
-      borderWidth: 1,
-      borderRadius: 3,
-      yAxisID: 'y2',
-      order: 3,
-    });
-  }
+  // Bars always visible (show occurrence volume by channel regardless of expertise filter)
+  datasets.push({
+    type: 'bar' as const,
+    label: 'Form. Novo',
+    data: novoBar,
+    backgroundColor: '#00B4A055',
+    borderColor: '#00B4A0',
+    borderWidth: 1,
+    borderRadius: 3,
+    yAxisID: 'y2',
+    order: 3,
+  });
+  datasets.push({
+    type: 'bar' as const,
+    label: 'Form. Antigo',
+    data: antigoBar,
+    backgroundColor: '#E8007D44',
+    borderColor: '#E8007D',
+    borderWidth: 1,
+    borderRadius: 3,
+    yAxisID: 'y2',
+    order: 3,
+  });
   // Lines
   if (!isPeritagemFilter) {
     datasets.push({
@@ -198,17 +197,17 @@ export default function LeadTimeSection({ filters = {}, gdCount, peritagemCount,
 
   return (
     <div className="space-y-4">
-      {/* Occurrence count boxes */}
+      {/* Occurrence count boxes — always shows full distribution (not affected by expertise filter) */}
       <div className="grid grid-cols-2 gap-3">
         <div className="bg-teal-50 border border-teal-100 rounded-lg p-3 text-center">
           <p className="text-xs text-gray-500">Ocorrências em Gestão Direta</p>
-          <p className="text-2xl font-bold text-[#00B4A0]">{fmt(gdCount)}</p>
-          <p className="text-[10px] text-gray-400 mt-0.5">{fmt(closedGdCount)} encerradas · LT calculado</p>
+          <p className="text-2xl font-bold text-[#00B4A0]">{fmt(gdCountBase)}</p>
+          <p className="text-[10px] text-gray-400 mt-0.5">{fmt(closedGdCountBase)} encerradas · LT calculado</p>
         </div>
         <div className="bg-orange-50 border border-orange-100 rounded-lg p-3 text-center">
           <p className="text-xs text-gray-500">Ocorrências com Peritagem</p>
-          <p className="text-2xl font-bold text-[#EF9F27]">{fmt(peritagemCount)}</p>
-          <p className="text-[10px] text-gray-400 mt-0.5">{fmt(closedPeritagemCount)} encerradas · LT calculado</p>
+          <p className="text-2xl font-bold text-[#EF9F27]">{fmt(peritagemCountBase)}</p>
+          <p className="text-[10px] text-gray-400 mt-0.5">{fmt(closedPeritagemCountBase)} encerradas · LT calculado</p>
         </div>
       </div>
 

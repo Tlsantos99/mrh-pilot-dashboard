@@ -129,6 +129,11 @@ export interface SummaryKPIs {
   total_peritagem: number;
   closed_gd_count: number;
   closed_peritagem_count: number;
+  // Base counts unaffected by expertise filter (for always-visible boxes)
+  total_gd_base: number;
+  total_peritagem_base: number;
+  closed_gd_count_base: number;
+  closed_peritagem_count_base: number;
   avg_lt_total: number | null;
   avg_lt_gd: number | null;
   avg_lt_expertise: number | null;
@@ -153,6 +158,7 @@ export interface DashboardFilters {
   wave?: string;
   channel?: string;
   expertise?: string;
+  status?: string;
   max_date?: string;
 }
 

@@ -14,19 +14,21 @@ export async function GET(req: NextRequest) {
     const filters = readFilters(new URL(req.url).searchParams);
     const supabase = createServerClient();
 
-    let q = supabase
-      .from('occurrences')
-      .select('opening_year,opening_week,opening_week_label,channel,has_expertise,lt_total,lt_opening_acceptance,closing_date')
-      .eq('eligible_for_pilot', true)
-      .eq('is_event', false)
-      .eq('branch', 'Riscos Múltiplos-Habitação')
-      .not('closing_date', 'is', null)
-      .not('opening_week_label', 'is', null)
-      .limit(5000);
-    q = applyFilters(q, filters);
+    const SEL = 'opening_year,opening_week,opening_week_label,channel,has_expertise,lt_total,lt_opening_acceptance,closing_date';
+    const makeQ = () =>
+      supabase.from('occurrences').select(SEL)
+        .eq('eligible_for_pilot', true).eq('is_event', false)
+        .eq('branch', 'Riscos Múltiplos-Habitação')
+        .not('closing_date', 'is', null)
+        .not('opening_week_label', 'is', null);
 
-    const { data: rows, error } = await q;
-    if (error) throw error;
+    const [{ data: p1, error: e1 }, { data: p2, error: e2 }] = await Promise.all([
+      applyFilters(makeQ(), filters).range(0, 999),
+      applyFilters(makeQ(), filters).range(1000, 1999),
+    ]);
+    if (e1) throw e1;
+    if (e2) throw e2;
+    const rows = [...(p1 ?? []), ...(p2 ?? [])];
 
     type Acc = { year: number; week: number; week_label: string; channel: string; expertise_type: string; lt_totals: number[]; lt_oa: number[] };
     const map = new Map<string, Acc>();

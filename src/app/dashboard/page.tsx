@@ -29,7 +29,8 @@ function DashboardContent() {
   const wave = sp.get('wave') ?? undefined;
   const channel = sp.get('channel') ?? undefined;
   const expertise = sp.get('expertise') ?? undefined;
-  const filters: DashboardFilters = { wave, channel, expertise };
+  const status = sp.get('status') ?? undefined;
+  const filters: DashboardFilters = { wave, channel, expertise, status };
 
   const [kpis, setKpis] = useState<SummaryKPIs | null>(null);
   const [lastUpdate, setLastUpdate] = useState<LastUpdate>({});
@@ -43,9 +44,10 @@ function DashboardContent() {
       if (wave) p.set('wave', wave);
       if (channel) p.set('channel', channel);
       if (expertise) p.set('expertise', expertise);
+      if (status) p.set('status', status);
       const qs = p.toString();
       const res = await fetch(`/api/metrics/summary${qs ? `?${qs}` : ''}`);
-      const { kpis: data, lastUpdate: lu } = await res.json();
+      const { kpis: data, lastUpdate: lu } = await res.json() as { kpis: import('@/types').SummaryKPIs; lastUpdate: Record<string, string> };
       if (!data || data.total_eligible === 0) {
         setNoData(true);
       } else {
@@ -58,7 +60,7 @@ function DashboardContent() {
     } finally {
       setLoading(false);
     }
-  }, [wave, channel, expertise]);
+  }, [wave, channel, expertise, status]);
 
   useEffect(() => { loadSummary(); }, [loadSummary]);
 
@@ -164,10 +166,10 @@ function DashboardContent() {
         </div>
         <LeadTimeSection
           filters={filters}
-          gdCount={kpis?.total_gd}
-          peritagemCount={kpis?.total_peritagem}
-          closedGdCount={kpis?.closed_gd_count}
-          closedPeritagemCount={kpis?.closed_peritagem_count}
+          gdCountBase={kpis?.total_gd_base}
+          peritagemCountBase={kpis?.total_peritagem_base}
+          closedGdCountBase={kpis?.closed_gd_count_base}
+          closedPeritagemCountBase={kpis?.closed_peritagem_count_base}
         />
       </div>
 
