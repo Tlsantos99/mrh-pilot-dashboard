@@ -101,10 +101,7 @@ export interface AgentPerformance {
   adoption_rate?: number;
   gd_rate?: number;
   avg_lt_total?: number;
-  // Recent-week metrics for trend indicators
-  novo_last_week?: number;
-  antigo_last_week?: number;
-  adoption_4weeks?: number | null;
+  adoption_last7d?: number | null;
 }
 
 export interface CallCenterWeekly {

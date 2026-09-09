@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
     const filters = readFilters(new URL(req.url).searchParams);
     const supabase = createServerClient();
 
-    const SEL = 'asf_aggregator,wave_number,wave_name,channel,has_expertise,lt_total,closing_date,opening_week_label,opening_year,opening_week';
+    const SEL = 'asf_aggregator,wave_number,wave_name,channel,has_expertise,lt_total,closing_date,opening_date';
     const makeQ = () =>
       supabase.from('occurrences').select(SEL)
         .eq('eligible_for_pilot', true)
@@ -28,11 +28,17 @@ export async function GET(req: NextRequest) {
     if (e2) throw e2;
     const rows = [...(p1 ?? []), ...(p2 ?? [])];
 
-    type WeekData = { year: number; week: number; novo: number; antigo: number };
+    // 7-day window ending at max_date (inclusive), or today if no filter
+    const refDate = filters.max_date ? new Date(filters.max_date) : new Date();
+    refDate.setHours(23, 59, 59, 999);
+    const windowStart = new Date(refDate);
+    windowStart.setDate(windowStart.getDate() - 6);
+    windowStart.setHours(0, 0, 0, 0);
+
     type Acc = {
       asf_aggregator: string; wave_number: number; wave_name: string;
       total: number; novo: number; antigo: number; email_outro: number; gd: number; lt_totals: number[];
-      weekly: Map<string, WeekData>;
+      novo_7d: number; antigo_7d: number;
     };
     const map = new Map<string, Acc>();
     for (const r of rows ?? []) {
@@ -41,7 +47,7 @@ export async function GET(req: NextRequest) {
       if (!map.has(key)) map.set(key, {
         asf_aggregator: key, wave_number: r.wave_number, wave_name: r.wave_name,
         total: 0, novo: 0, antigo: 0, email_outro: 0, gd: 0, lt_totals: [],
-        weekly: new Map(),
+        novo_7d: 0, antigo_7d: 0,
       });
       const w = map.get(key)!;
       w.total++;
@@ -50,26 +56,15 @@ export async function GET(req: NextRequest) {
       else w.email_outro++;
       if (!r.has_expertise) w.gd++;
       if (r.closing_date && r.lt_total != null) w.lt_totals.push(r.lt_total as number);
-      // Track weekly counts for last-week and 4-week adoption
-      if (r.opening_week_label) {
-        const wk = r.opening_week_label as string;
-        if (!w.weekly.has(wk)) w.weekly.set(wk, { year: r.opening_year as number, week: r.opening_week as number, novo: 0, antigo: 0 });
-        const wd = w.weekly.get(wk)!;
-        if (r.channel === 'Formulário Novo') wd.novo++;
-        else if (r.channel === 'Formulário Antigo') wd.antigo++;
+      // Track last-7-days counts for adoption trend
+      if (r.opening_date) {
+        const od = new Date(r.opening_date as string);
+        if (od >= windowStart && od <= refDate) {
+          if (r.channel === 'Formulário Novo') w.novo_7d++;
+          else if (r.channel === 'Formulário Antigo') w.antigo_7d++;
+        }
       }
     }
-
-    // Find the 4 most recent opening weeks across all data
-    const allWeeksSorted = Array.from(
-      new Set(rows.filter(r => r.opening_week_label).map(r => r.opening_week_label as string))
-    ).map(label => {
-      const r = rows.find(x => x.opening_week_label === label)!;
-      return { label, year: r.opening_year as number, week: r.opening_week as number };
-    }).sort((a, b) => a.year !== b.year ? a.year - b.year : a.week - b.week);
-
-    const lastWeekLabel = allWeeksSorted[allWeeksSorted.length - 1]?.label ?? '';
-    const last4Labels = new Set(allWeeksSorted.slice(-4).map(w => w.label));
 
     const data = Array.from(map.values())
       .sort((a, b) => {
@@ -78,31 +73,22 @@ export async function GET(req: NextRequest) {
         const br = b.novo + b.antigo > 0 ? b.novo / (b.novo + b.antigo) : -1;
         return br - ar;
       })
-      .map(w => {
-        const lw = w.weekly.get(lastWeekLabel) ?? { novo: 0, antigo: 0 };
-        let novo4 = 0, antigo4 = 0;
-        w.weekly.forEach((wd, label) => {
-          if (last4Labels.has(label)) { novo4 += wd.novo; antigo4 += wd.antigo; }
-        });
-        return {
-          agent_code: w.asf_aggregator,
-          agent_name: w.asf_aggregator,
-          wave_number: w.wave_number,
-          wave_name: w.wave_name,
-          total: w.total,
-          novo: w.novo,
-          antigo: w.antigo,
-          email_outro: w.email_outro,
-          adoption_rate: (w.novo + w.antigo) > 0 ? Math.round((w.novo / (w.novo + w.antigo)) * 1000) / 10 : null,
-          gd_rate: w.total > 0 ? Math.round((w.gd / w.total) * 1000) / 10 : null,
-          avg_lt_total: avg(w.lt_totals),
-          novo_last_week: lw.novo,
-          antigo_last_week: lw.antigo,
-          adoption_4weeks: (novo4 + antigo4) > 0 ? Math.round(novo4 / (novo4 + antigo4) * 1000) / 10 : null,
-        };
-      });
+      .map(w => ({
+        agent_code: w.asf_aggregator,
+        agent_name: w.asf_aggregator,
+        wave_number: w.wave_number,
+        wave_name: w.wave_name,
+        total: w.total,
+        novo: w.novo,
+        antigo: w.antigo,
+        email_outro: w.email_outro,
+        adoption_rate: (w.novo + w.antigo) > 0 ? Math.round((w.novo / (w.novo + w.antigo)) * 1000) / 10 : null,
+        gd_rate: w.total > 0 ? Math.round((w.gd / w.total) * 1000) / 10 : null,
+        avg_lt_total: avg(w.lt_totals),
+        adoption_last7d: (w.novo_7d + w.antigo_7d) > 0 ? Math.round(w.novo_7d / (w.novo_7d + w.antigo_7d) * 1000) / 10 : null,
+      }));
 
-    return NextResponse.json({ data, last_week_label: lastWeekLabel });
+    return NextResponse.json({ data });
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 });
   }

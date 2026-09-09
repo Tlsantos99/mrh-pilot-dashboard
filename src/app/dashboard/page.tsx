@@ -242,7 +242,7 @@ function DashboardContent() {
 
       {/* Section 4 — Por Mediadora */}
       <div id="agentes" className="card p-6 scroll-mt-4">
-        <SectionHeader title="4. Performance por Mediadora" subtitle="Agrupado por ASF Agregador e Wave" />
+        <SectionHeader title="4. Performance por AGE" subtitle="Agrupado por ASF Agregador e Wave" />
         <AgentTable filters={filters} />
       </div>
 
