@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // Parse Excel
+    // Parse Excel — lazy: only read headers + row count, avoid parsing all cells
     const workbook = XLSX.read(buffer, { type: 'buffer', cellDates: false });
     const isChamadas = file.name.toLowerCase().includes('chamadas');
     const firstSheetName = workbook.SheetNames[0];
@@ -51,19 +51,41 @@ export async function POST(req: NextRequest) {
     const sheet = workbook.Sheets[sheetName];
     const headerRow = isChamadas ? 3 : 0;
 
-    const rawData = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, {
-      raw: true,
-      defval: null,
-      range: headerRow,
-    });
+    if (!sheet || !sheet['!ref']) {
+      return NextResponse.json({
+        isDuplicateFile: false,
+        fileHash,
+        filename: file.name,
+        fileType: manualType ?? 'global',
+        detected: false,
+        rowsFound: 0, rowsNew: 0, rowsDuplicate: 0,
+        errors: ['Ficheiro sem dados ou folha não encontrada.'],
+        warnings: [],
+        ready: false,
+      });
+    }
 
-    const headers = rawData.length > 0 ? Object.keys(rawData[0]) : [];
+    // Count rows from sheet range (fast — no cell parsing)
+    const sheetRange = XLSX.utils.decode_range(sheet['!ref']);
+    const totalRows = Math.max(0, sheetRange.e.r - headerRow); // rows excluding header
+
+    // Parse only first 5 rows to get headers (fast)
+    const previewRange = {
+      s: { r: headerRow, c: sheetRange.s.c },
+      e: { r: Math.min(headerRow + 5, sheetRange.e.r), c: sheetRange.e.c },
+    };
+    const previewData = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, {
+      raw: true, defval: null, range: previewRange,
+    });
+    const headers = previewData.length > 0 ? Object.keys(previewData[0]) : [];
+
     const detection = detectFileType(file.name, headers);
     const fileType: FileType = manualType ?? detection.fileType ?? 'global';
 
-    const validation = validateFileStructure(fileType, headers, rawData);
+    // Validate using just headers + empty sample (structure check only)
+    const validation = validateFileStructure(fileType, headers, totalRows === 0 ? [] : previewData);
 
-    // Check for row-level duplicates against staging
+    // Sample 200 scattered rows for dedup estimate
     const tableMap: Record<FileType, string> = {
       global: 'staging_global',
       piloto: 'staging_piloto_agentes',
@@ -72,21 +94,30 @@ export async function POST(req: NextRequest) {
       chamadas: 'staging_chamadas',
     };
 
-    // Sample row hashes to estimate duplicates
-    const sampleHashes = rawData.slice(0, 200).map(row =>
-      computeRowHash(row as Record<string, unknown>)
-    );
+    let estimatedDuplicates = 0;
+    if (totalRows > 0) {
+      // Parse first 200 data rows only for dedup estimate (fast)
+      const sampleRange = {
+        s: { r: headerRow, c: sheetRange.s.c },
+        e: { r: Math.min(headerRow + 200, sheetRange.e.r), c: sheetRange.e.c },
+      };
+      const sampleData = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, {
+        raw: true, defval: null, range: sampleRange,
+      });
+      const sampleHashes = sampleData.map(row => computeRowHash(row as Record<string, unknown>));
 
-    const { data: existingRows } = await supabase
-      .from(tableMap[fileType])
-      .select('row_hash')
-      .in('row_hash', sampleHashes);
+      if (sampleHashes.length > 0) {
+        const { data: existingRows } = await supabase
+          .from(tableMap[fileType])
+          .select('row_hash')
+          .in('row_hash', sampleHashes);
 
-    const existingHashSet = new Set((existingRows ?? []).map(r => r.row_hash));
-    const sampleDuplicates = sampleHashes.filter(h => existingHashSet.has(h)).length;
-    const estimatedDuplicateRate = sampleHashes.length > 0 ? sampleDuplicates / sampleHashes.length : 0;
-    const estimatedDuplicates = Math.round(rawData.length * estimatedDuplicateRate);
-    const estimatedNew = rawData.length - estimatedDuplicates;
+        const existingHashSet = new Set((existingRows ?? []).map(r => r.row_hash));
+        const sampleDuplicates = sampleHashes.filter(h => existingHashSet.has(h)).length;
+        const rate = sampleDuplicates / sampleHashes.length;
+        estimatedDuplicates = Math.round(totalRows * rate);
+      }
+    }
 
     return NextResponse.json({
       isDuplicateFile: false,
@@ -96,12 +127,12 @@ export async function POST(req: NextRequest) {
       detected: detection.confidence !== 'none',
       detectionConfidence: detection.confidence,
       detectionReason: detection.reason,
-      rowsFound: rawData.length,
-      rowsNew: estimatedNew,
+      rowsFound: totalRows,
+      rowsNew: totalRows - estimatedDuplicates,
       rowsDuplicate: estimatedDuplicates,
       errors: validation.errors,
       warnings: validation.warnings,
-      ready: validation.valid,
+      ready: validation.valid && totalRows > 0,
       headers: headers.slice(0, 10),
     });
 

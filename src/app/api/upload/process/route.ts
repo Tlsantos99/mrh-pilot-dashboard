@@ -188,11 +188,14 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Rows that were silently skipped by ON CONFLICT DO NOTHING
+    const skipped = processedRows.length - inserted - Math.max(0, rejected - (rawData.length - processedRows.length));
+
     // Update upload history
     await supabase.from('upload_history').update({
       rows_inserted: inserted,
       rows_rejected: rejected,
-      rows_updated: 0,
+      rows_updated: Math.max(0, skipped), // re-used field: "already existed / ignored by dedup"
       status: rejected === rawData.length ? 'error' : inserted === 0 ? 'duplicate' : 'success',
     }).eq('id', uploadId);
 

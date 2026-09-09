@@ -45,6 +45,7 @@ export default function UploadHistory() {
             <th className="pb-2 pr-3 font-medium">Tipo</th>
             <th className="pb-2 pr-3 font-medium text-right">Recebidas</th>
             <th className="pb-2 pr-3 font-medium text-right">Inseridas</th>
+            <th className="pb-2 pr-3 font-medium text-right">Já existiam</th>
             <th className="pb-2 pr-3 font-medium text-right">Rejeitadas</th>
             <th className="pb-2 font-medium">Estado</th>
           </tr>
@@ -62,6 +63,9 @@ export default function UploadHistory() {
               <td className="py-2 pr-3 text-right">{row.rows_received?.toLocaleString('pt-PT')}</td>
               <td className="py-2 pr-3 text-right text-green-700 font-medium">
                 {row.rows_inserted?.toLocaleString('pt-PT')}
+              </td>
+              <td className="py-2 pr-3 text-right text-gray-400">
+                {(row.rows_updated ?? 0) > 0 ? row.rows_updated?.toLocaleString('pt-PT') : '—'}
               </td>
               <td className="py-2 pr-3 text-right">
                 <span className={row.rows_rejected > 0 ? 'text-red-600 font-medium' : 'text-gray-400'}>

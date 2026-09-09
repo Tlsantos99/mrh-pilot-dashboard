@@ -15,6 +15,8 @@ interface ValidationResult {
   ready?: boolean;
   fileHash?: string;
   previousUpload?: { upload_timestamp: string };
+  error?: string;   // API-level error (catch block)
+  detail?: string;  // Technical error detail
 }
 
 interface ProcessResult {
@@ -57,10 +59,19 @@ export default function DataManagementPage() {
       if (manualType) fd.append('fileType', manualType);
 
       const res = await fetch('/api/upload/validate', { method: 'POST', body: fd });
-      const data = await res.json();
+      let data: ValidationResult;
+      try {
+        data = await res.json();
+      } catch {
+        data = { errors: [`Erro de rede ou timeout (HTTP ${res.status}). O ficheiro pode ser demasiado grande ou o servidor demorou demasiado.`], ready: false };
+      }
+      // Surface API-level errors into the errors array so they're always visible
+      if (data.error && !data.errors?.length) {
+        data = { ...data, errors: [data.error, ...(data.detail ? [`Detalhe: ${data.detail}`] : [])] };
+      }
       setValidation(data);
-    } catch {
-      setValidation({ errors: ['Erro ao validar ficheiro.'], ready: false });
+    } catch (e) {
+      setValidation({ errors: [`Erro de rede: ${e instanceof Error ? e.message : String(e)}`], ready: false });
     } finally {
       setValidating(false);
     }
@@ -217,6 +228,9 @@ export default function DataManagementPage() {
                   {(validation.errors ?? []).map((e, i) => (
                     <p key={i} className="text-xs text-red-700">✕ {e}</p>
                   ))}
+                  {validation.detail && (
+                    <p className="text-xs text-red-400 font-mono mt-1 break-all">Detalhe técnico: {validation.detail}</p>
+                  )}
                 </div>
               )}
 
