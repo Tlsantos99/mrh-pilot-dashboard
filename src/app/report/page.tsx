@@ -118,63 +118,57 @@ export default function ReportPage() {
     }
   }, [data]);
 
-  function drawLtChart(id: string, ltData: LtRow[], mode: 'all' | 'gd' | 'peritagem') {
+  function drawLtChart(id: string, allLtData: LtRow[], mode: 'all' | 'gd' | 'peritagem') {
     const canvas = document.getElementById(id) as HTMLCanvasElement | null;
     if (!canvas) return;
 
-    const allLabels = sortWeekLabels(Array.from(new Set(ltData.map(d => d.week_label))), ltData);
+    // Filter to the relevant expertise subset for this chart
+    const expertiseFilter = mode === 'gd' ? 'Gestão Direta' : mode === 'peritagem' ? 'Peritagem' : null;
+    const ltData = expertiseFilter ? allLtData.filter(d => d.expertise_type === expertiseFilter) : allLtData;
 
-    const ltGdNovo = allLabels.map(w =>
-      ltData.find(d => d.week_label === w && d.expertise_type === 'Gestão Direta' && d.channel === 'Formulário Novo')?.avg_lt_total ?? null
-    );
-    const ltGdAntigo = allLabels.map(w =>
-      ltData.find(d => d.week_label === w && d.expertise_type === 'Gestão Direta' && d.channel === 'Formulário Antigo')?.avg_lt_total ?? null
-    );
-    const ltPeri = allLabels.map(w => {
-      const rows = ltData.filter(d => d.week_label === w && d.expertise_type === 'Peritagem');
-      const valid = rows.filter(r => r.avg_lt_total != null);
-      if (!valid.length) return null;
-      const sum = valid.reduce((s, r) => s + (r.avg_lt_total ?? 0) * r.total, 0);
-      const tot = valid.reduce((s, r) => s + r.total, 0);
-      return tot > 0 ? Math.round(sum / tot * 10) / 10 : null;
-    });
-    // Bars: closed occurrence counts from lead-times data
+    const allLabels = sortWeekLabels(Array.from(new Set(allLtData.map(d => d.week_label))), allLtData);
+
+    // Aggregate LT by channel (across whatever expertise subset is active for this chart)
+    function aggCh(channel: string) {
+      return allLabels.map(w => {
+        const rows = ltData.filter(d => d.week_label === w && d.channel === channel);
+        const valid = rows.filter(r => r.avg_lt_total != null);
+        if (!valid.length) return null;
+        const sumLt = valid.reduce((s, r) => s + (r.avg_lt_total ?? 0) * r.total, 0);
+        const tot = valid.reduce((s, r) => s + r.total, 0);
+        return tot > 0 ? Math.round(sumLt / tot * 10) / 10 : null;
+      });
+    }
+
+    const ltNovo = aggCh('Formulário Novo');
+    const ltAntigo = aggCh('Formulário Antigo');
+
+    const prefix = mode === 'gd' ? 'LT GD' : mode === 'peritagem' ? 'LT Per.' : 'LT';
+
+    // Bars: closed occurrence counts for this mode
     const novoBar = allLabels.map(w =>
-      ltData.filter(d => d.week_label === w && d.channel === 'Formulário Novo' &&
-        (mode === 'all' ? true : mode === 'gd' ? d.expertise_type === 'Gestão Direta' : d.expertise_type === 'Peritagem')
-      ).reduce((s, r) => s + r.total, 0) || null
+      ltData.filter(d => d.week_label === w && d.channel === 'Formulário Novo').reduce((s, r) => s + r.total, 0) || null
     );
     const antigoBar = allLabels.map(w =>
-      ltData.filter(d => d.week_label === w && d.channel === 'Formulário Antigo' &&
-        (mode === 'all' ? true : mode === 'gd' ? d.expertise_type === 'Gestão Direta' : d.expertise_type === 'Peritagem')
-      ).reduce((s, r) => s + r.total, 0) || null
+      ltData.filter(d => d.week_label === w && d.channel === 'Formulário Antigo').reduce((s, r) => s + r.total, 0) || null
     );
 
     const datasets: object[] = [
       { type: 'bar', label: 'Form. Novo', data: novoBar, backgroundColor: '#00B4A055', borderColor: '#00B4A0', borderWidth: 1, borderRadius: 2, yAxisID: 'y2', order: 3 },
       { type: 'bar', label: 'Form. Antigo', data: antigoBar, backgroundColor: '#E8007D44', borderColor: '#E8007D', borderWidth: 1, borderRadius: 2, yAxisID: 'y2', order: 3 },
+      { type: 'line', label: `${prefix} — Novo`, data: ltNovo, borderColor: '#00B4A0', borderWidth: 2, pointRadius: 2, tension: 0.3, yAxisID: 'y', order: 1, spanGaps: true, backgroundColor: 'transparent' },
+      { type: 'line', label: `${prefix} — Antigo`, data: ltAntigo, borderColor: '#E8007D', borderWidth: 2, borderDash: [4, 3], pointRadius: 2, tension: 0.3, yAxisID: 'y', order: 1, spanGaps: true, backgroundColor: 'transparent' },
     ];
-    if (mode !== 'peritagem') {
-      datasets.push(
-        { type: 'line', label: 'LT GD Novo', data: ltGdNovo, borderColor: '#00B4A0', borderWidth: 2, pointRadius: 2, tension: 0.3, yAxisID: 'y', order: 1, spanGaps: true, backgroundColor: 'transparent' },
-        { type: 'line', label: 'LT GD Antigo', data: ltGdAntigo, borderColor: '#E8007D', borderWidth: 2, borderDash: [4, 3], pointRadius: 2, tension: 0.3, yAxisID: 'y', order: 1, spanGaps: true, backgroundColor: 'transparent' }
-      );
-    }
-    if (mode !== 'gd') {
-      datasets.push(
-        { type: 'line', label: 'LT Peritagem', data: ltPeri, borderColor: '#EF9F27', borderWidth: 2, borderDash: [3, 3], pointRadius: 2, tension: 0.3, yAxisID: 'y', order: 1, spanGaps: true, backgroundColor: 'transparent' }
-      );
-    }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     chartInstances.current[id] = new ChartJS(canvas, { type: 'bar', data: { labels: allLabels, datasets: datasets as any }, options: {
       responsive: true, animation: false,
       interaction: { mode: 'index', intersect: false },
-      plugins: { legend: { position: 'top', labels: { font: { size: 8 }, boxWidth: 8, padding: 6 } } },
+      plugins: { legend: { position: 'top', labels: { font: { size: 10 }, boxWidth: 10, padding: 8 } } },
       scales: {
-        x: { grid: { display: false }, ticks: { font: { size: 8 }, maxRotation: 45 } },
-        y: { position: 'left', beginAtZero: true, title: { display: true, text: 'Dias úteis', font: { size: 8 } }, ticks: { font: { size: 8 } } },
-        y2: { position: 'right', beginAtZero: true, grid: { drawOnChartArea: false }, title: { display: true, text: 'Ocorrências enc.', font: { size: 8 } }, ticks: { font: { size: 8 }, stepSize: 5 } },
+        x: { grid: { display: false }, ticks: { font: { size: 9 }, maxRotation: 45 } },
+        y: { position: 'left', beginAtZero: true, title: { display: true, text: 'Dias úteis', font: { size: 9 } }, ticks: { font: { size: 9 } } },
+        y2: { position: 'right', beginAtZero: true, grid: { drawOnChartArea: false }, title: { display: true, text: 'Ocorrências enc.', font: { size: 9 } }, ticks: { font: { size: 9 }, stepSize: 5 } },
       },
     } as any });
   }
@@ -401,7 +395,7 @@ export default function ReportPage() {
             </div>
           ))}
 
-          {/* LEAD TIMES */}
+          {/* LEAD TIMES — KPI resumo */}
           <div className="report-page">
             <div className="section-title">Lead Times — Casos Encerrados</div>
             <div className="kpi-grid-4">
@@ -422,27 +416,35 @@ export default function ReportPage() {
                 </div>
               </div>
             </div>
-
-            {data.ltData.length > 0 && (
-              <div style={{marginTop:'1.5rem'}}>
-                <div className="lt-charts-grid">
-                  <div>
-                    <p className="chart-label">Todos os casos</p>
-                    <canvas id="lt-all" height={160} />
-                  </div>
-                  <div>
-                    <p className="chart-label">Gestão Direta</p>
-                    <canvas id="lt-gd" height={160} />
-                  </div>
-                  <div>
-                    <p className="chart-label">Peritagem</p>
-                    <canvas id="lt-peri" height={160} />
-                  </div>
-                </div>
-                <p className="legend-row" style={{marginTop:'0.5rem'}}>Linhas = LT médio em dias úteis (eixo esq.) · Barras = ocorrências encerradas por semana (eixo dir.)</p>
-              </div>
-            )}
+            <p className="legend-row" style={{marginTop:'1rem'}}>Linhas = LT médio em dias úteis (eixo esq.) · Barras = ocorrências encerradas por semana (eixo dir.) · Nas páginas seguintes: detalhe por segmento</p>
           </div>
+
+          {/* LEAD TIMES — Todos os casos */}
+          {data.ltData.length > 0 && (
+            <div className="report-page">
+              <div className="section-title">Lead Times — Todos os Casos</div>
+              <div className="section-subtitle">LT agregado por canal de entrada (Form. Novo vs Form. Antigo), independentemente de GD ou Peritagem</div>
+              <canvas id="lt-all" height={200} style={{marginTop:'1rem'}} />
+            </div>
+          )}
+
+          {/* LEAD TIMES — Gestão Direta */}
+          {data.ltData.length > 0 && (
+            <div className="report-page">
+              <div className="section-title">Lead Times — Gestão Direta</div>
+              <div className="section-subtitle">Apenas ocorrências sem peritagem · {fmt(data.kpis.closed_gd_count_base)} casos encerrados</div>
+              <canvas id="lt-gd" height={200} style={{marginTop:'1rem'}} />
+            </div>
+          )}
+
+          {/* LEAD TIMES — Peritagem */}
+          {data.ltData.length > 0 && (
+            <div className="report-page">
+              <div className="section-title">Lead Times — Peritagem</div>
+              <div className="section-subtitle">Apenas ocorrências com peritagem · {fmt(data.kpis.closed_peritagem_count_base)} casos encerrados</div>
+              <canvas id="lt-peri" height={200} style={{marginTop:'1rem'}} />
+            </div>
+          )}
 
           {/* LINHA DE APOIO */}
           {data.calls && data.calls.total > 0 && (

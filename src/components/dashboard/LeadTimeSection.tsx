@@ -63,29 +63,31 @@ export default function LeadTimeSection({ filters = {}, gdCountBase, peritagemCo
   const isGdFilter = filters.expertise === 'false';
   const isPeritagemFilter = filters.expertise === 'true';
 
+  // Label prefix depends on active expertise filter
+  const ltPrefix = isGdFilter ? 'LT GD' : isPeritagemFilter ? 'LT Per.' : 'LT';
+
   // Bar data (weekly occurrence counts from adoption API)
   const novoBar = allWeekLabels.map(w => adoptionData.find(d => d.week_label === w)?.novo ?? null);
   const antigoBar = allWeekLabels.map(w => adoptionData.find(d => d.week_label === w)?.antigo ?? null);
 
-  // Line data (LT averages from lead-times API)
-  const ltGdNovo = allWeekLabels.map(w =>
-    ltData.find(d => d.week_label === w && d.expertise_type === 'Gestão Direta' && d.channel === 'Formulário Novo')?.avg_lt_total ?? null
-  );
-  const ltGdAntigo = allWeekLabels.map(w =>
-    ltData.find(d => d.week_label === w && d.expertise_type === 'Gestão Direta' && d.channel === 'Formulário Antigo')?.avg_lt_total ?? null
-  );
-  const ltPeritagem = allWeekLabels.map(w => {
-    const rows = ltData.filter(d => d.week_label === w && d.expertise_type === 'Peritagem');
-    if (!rows.length) return null;
-    const valid = rows.filter(r => r.avg_lt_total != null);
-    if (!valid.length) return null;
-    const sumLt = valid.reduce((s, r) => s + (r.avg_lt_total ?? 0) * (r.total ?? 1), 0);
-    const totalOcc = valid.reduce((s, r) => s + (r.total ?? 1), 0);
-    return totalOcc > 0 ? Math.round(sumLt / totalOcc * 10) / 10 : null;
-  });
+  // Line data — aggregate by channel (novo/antigo) across whatever expertise filter is active.
+  // The API already filters by expertise, so ltData only contains the relevant rows.
+  function aggByChannel(channel: string) {
+    return allWeekLabels.map(w => {
+      const rows = ltData.filter(d => d.week_label === w && d.channel === channel);
+      const valid = rows.filter(r => r.avg_lt_total != null);
+      if (!valid.length) return null;
+      const sumLt = valid.reduce((s, r) => s + (r.avg_lt_total ?? 0) * (r.total ?? 1), 0);
+      const tot = valid.reduce((s, r) => s + (r.total ?? 1), 0);
+      return tot > 0 ? Math.round(sumLt / tot * 10) / 10 : null;
+    });
+  }
+
+  const ltNovo = aggByChannel('Formulário Novo');
+  const ltAntigo = aggByChannel('Formulário Antigo');
 
   const datasets = [];
-  // Bars always visible (show occurrence volume by channel regardless of expertise filter)
+  // Bars always visible
   datasets.push({
     type: 'bar' as const,
     label: 'Form. Novo',
@@ -108,55 +110,36 @@ export default function LeadTimeSection({ filters = {}, gdCountBase, peritagemCo
     yAxisID: 'y2',
     order: 3,
   });
-  // Lines
-  if (!isPeritagemFilter) {
-    datasets.push({
-      type: 'line' as const,
-      label: 'LT GD — Novo',
-      data: ltGdNovo,
-      borderColor: '#00B4A0',
-      backgroundColor: 'transparent',
-      borderWidth: 2.5,
-      pointRadius: 3,
-      pointBackgroundColor: '#00B4A0',
-      tension: 0.3,
-      yAxisID: 'y',
-      order: 1,
-      spanGaps: true,
-    });
-    datasets.push({
-      type: 'line' as const,
-      label: 'LT GD — Antigo',
-      data: ltGdAntigo,
-      borderColor: '#E8007D',
-      backgroundColor: 'transparent',
-      borderWidth: 2.5,
-      borderDash: [5, 4],
-      pointRadius: 3,
-      pointBackgroundColor: '#E8007D',
-      tension: 0.3,
-      yAxisID: 'y',
-      order: 1,
-      spanGaps: true,
-    });
-  }
-  if (!isGdFilter) {
-    datasets.push({
-      type: 'line' as const,
-      label: 'LT Peritagem',
-      data: ltPeritagem,
-      borderColor: '#EF9F27',
-      backgroundColor: 'transparent',
-      borderWidth: 2,
-      borderDash: [3, 3],
-      pointRadius: 3,
-      pointBackgroundColor: '#EF9F27',
-      tension: 0.3,
-      yAxisID: 'y',
-      order: 1,
-      spanGaps: true,
-    });
-  }
+  // Lines: LT Novo and LT Antigo (aggregated across active expertise filter)
+  datasets.push({
+    type: 'line' as const,
+    label: `${ltPrefix} — Novo`,
+    data: ltNovo,
+    borderColor: '#00B4A0',
+    backgroundColor: 'transparent',
+    borderWidth: 2.5,
+    pointRadius: 3,
+    pointBackgroundColor: '#00B4A0',
+    tension: 0.3,
+    yAxisID: 'y',
+    order: 1,
+    spanGaps: true,
+  });
+  datasets.push({
+    type: 'line' as const,
+    label: `${ltPrefix} — Antigo`,
+    data: ltAntigo,
+    borderColor: '#E8007D',
+    backgroundColor: 'transparent',
+    borderWidth: 2.5,
+    borderDash: [5, 4],
+    pointRadius: 3,
+    pointBackgroundColor: '#E8007D',
+    tension: 0.3,
+    yAxisID: 'y',
+    order: 1,
+    spanGaps: true,
+  });
 
   const chartData = { labels: allWeekLabels, datasets };
 
