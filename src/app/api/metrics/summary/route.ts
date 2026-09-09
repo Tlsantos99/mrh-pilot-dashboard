@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
     const PAGE = 1000;
 
     const SEL = 'channel,has_expertise,lt_total,lt_opening_acceptance,closing_date,acceptance_date';
-    const SEL_BASE = 'has_expertise,lt_total,closing_date';
+    const SEL_BASE = 'channel,has_expertise,lt_total,lt_opening_acceptance,closing_date';
 
     const makeQ = () =>
       supabase.from('occurrences').select(SEL)
@@ -70,9 +70,24 @@ export async function GET(req: NextRequest) {
     const closed_gd_base = closed_base.filter(x => !x.has_expertise);
     const closed_peritagem_base = closed_base.filter(x => x.has_expertise);
 
+    // GD rates for closed cases only (by channel)
+    const closed_base_all = closed_base as { channel?: string; has_expertise: boolean; lt_total: number; lt_opening_acceptance?: number | null }[];
+    const gd_rate_closed = closed_base.length > 0
+      ? Math.round((closed_gd_base.length / closed_base.length) * 1000) / 10 : 0;
+    const closed_novo_base = closed_base_all.filter(x => x.channel === 'Formulário Novo');
+    const closed_antigo_base = closed_base_all.filter(x => x.channel === 'Formulário Antigo');
+    const gd_rate_novo_closed = closed_novo_base.length > 0
+      ? Math.round((closed_novo_base.filter(x => !x.has_expertise).length / closed_novo_base.length) * 1000) / 10 : 0;
+    const gd_rate_antigo_closed = closed_antigo_base.length > 0
+      ? Math.round((closed_antigo_base.filter(x => !x.has_expertise).length / closed_antigo_base.length) * 1000) / 10 : 0;
+    // LT abertura→aceitação for Formulário Novo specifically (closed cases)
+    const with_acc_novo = (rBase as { channel?: string; lt_opening_acceptance?: number | null }[])
+      .filter(x => x.channel === 'Formulário Novo' && x.lt_opening_acceptance != null) as { lt_opening_acceptance: number }[];
+
     const kpis = {
       total_eligible, total_novo, total_antigo, total_email,
       adoption_rate, gd_rate_global, gd_rate_novo, gd_rate_antigo,
+      gd_rate_closed, gd_rate_novo_closed, gd_rate_antigo_closed,
       total_gd: gd_rows.length, total_peritagem: peritagem_rows.length,
       closed_gd_count: closed_gd.length, closed_peritagem_count: closed_peritagem.length,
       total_gd_base: gd_rows_base.length,
@@ -83,6 +98,7 @@ export async function GET(req: NextRequest) {
       avg_lt_gd: avg(closed_gd.map(x => x.lt_total)),
       avg_lt_expertise: avg(closed_peritagem.map(x => x.lt_total)),
       avg_lt_opening_acceptance: avg(with_acc.map(x => x.lt_opening_acceptance)),
+      avg_lt_opening_acceptance_novo: avg(with_acc_novo.map(x => x.lt_opening_acceptance)),
     };
 
     const lastUpdate: Record<string, string> = {};

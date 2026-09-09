@@ -11,15 +11,17 @@ ChartJS.register(CategoryScale, LinearScale, BarElement, BarController, LineElem
 interface KPIs {
   total_eligible: number; total_novo: number; total_antigo: number; total_email: number;
   adoption_rate: number; gd_rate_global: number; gd_rate_novo: number; gd_rate_antigo: number;
+  gd_rate_closed: number; gd_rate_novo_closed: number; gd_rate_antigo_closed: number;
   total_gd_base: number; total_peritagem_base: number;
   closed_gd_count_base: number; closed_peritagem_count_base: number;
   avg_lt_total: number | null; avg_lt_gd: number | null; avg_lt_expertise: number | null;
-  avg_lt_opening_acceptance: number | null;
+  avg_lt_opening_acceptance: number | null; avg_lt_opening_acceptance_novo: number | null;
 }
 interface AgentRow {
   agent_code: string; agent_name: string; wave_number: number; wave_name: string;
   total: number; novo: number; antigo: number; email_outro: number;
   adoption_rate: number | null; gd_rate: number | null; avg_lt_total: number | null;
+  novo_7d?: number; antigo_7d?: number;
 }
 interface CallTotals {
   total: number; answered: number; answerRate: number;
@@ -35,7 +37,7 @@ interface WeeklyCall {
 interface LtRow {
   year: number; week: number; week_label: string;
   channel: string; expertise_type: string;
-  total: number; avg_lt_total: number | null;
+  total: number; avg_lt_total: number | null; avg_lt_opening_acceptance: number | null;
 }
 interface ReportData {
   kpis: KPIs; agents: AgentRow[]; calls: CallTotals | null;
@@ -288,6 +290,134 @@ export default function ReportPage() {
             </div>
           </div>
 
+          {/* HIGHLIGHTS */}
+          {(() => {
+            // 7-day adoption from agents
+            const total7dNovo = data.agents.reduce((s, a) => s + (a.novo_7d ?? 0), 0);
+            const total7dAntigo = data.agents.reduce((s, a) => s + (a.antigo_7d ?? 0), 0);
+            const adoption7d = (total7dNovo + total7dAntigo) > 0
+              ? Math.round(total7dNovo / (total7dNovo + total7dAntigo) * 1000) / 10 : null;
+            // Agents opening new form for the first time this week (all novo activity is from this window)
+            const firstTimers = data.agents.filter(a => (a.novo_7d ?? 0) > 0 && a.novo === (a.novo_7d ?? 0));
+            // Agents that never opened new form but have antigo (need intervention)
+            const neverNovo = data.agents.filter(a => a.novo === 0 && a.antigo > 0);
+            // Weighted LT by channel from ltData
+            function ltByChannel(ch: string) {
+              const rows = data.ltData.filter(d => d.channel === ch && d.avg_lt_total != null);
+              const totalW = rows.reduce((s, r) => s + r.total, 0);
+              if (!totalW) return null;
+              return Math.round(rows.reduce((s, r) => s + (r.avg_lt_total ?? 0) * r.total, 0) / totalW * 10) / 10;
+            }
+            function ltOAByChannel(ch: string) {
+              const rows = data.ltData.filter(d => d.channel === ch && d.avg_lt_opening_acceptance != null);
+              const totalW = rows.reduce((s, r) => s + r.total, 0);
+              if (!totalW) return null;
+              return Math.round(rows.reduce((s, r) => s + (r.avg_lt_opening_acceptance ?? 0) * r.total, 0) / totalW * 10) / 10;
+            }
+            const ltNovo = ltByChannel('Formulário Novo');
+            const ltAntigo = ltByChannel('Formulário Antigo');
+            const ltOANovo = ltOAByChannel('Formulário Novo');
+            const LT_REF_2025 = 33.6;
+            const ltDelta = data.kpis.avg_lt_total != null ? Math.round((data.kpis.avg_lt_total - LT_REF_2025) * 10) / 10 : null;
+            // 7-day window label
+            const refD = new Date(data.maxDate + 'T12:00:00');
+            const startD = new Date(refD); startD.setDate(startD.getDate() - 6);
+            const fmtShort = (d: Date) => d.toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit' });
+            return (
+              <div className="report-page highlights-page">
+                <div className="section-title">Destaques da Semana</div>
+                <div className="section-subtitle">Dados piloto até {fmtDate(data.maxDate)} · Janela de referência: {fmtShort(startD)} – {fmtShort(refD)}</div>
+                <div className="highlights-grid">
+
+                  {/* CARD 1 — Adoção */}
+                  <div className="hl-card hl-teal">
+                    <div className="hl-card-header">
+                      <div className="hl-card-label">Taxa de Adoção</div>
+                      <div className="hl-card-value">{adoption7d !== null ? `${adoption7d}%` : '—'}</div>
+                      <div className="hl-card-sub">últimos 7 dias · Form. Novo / (Novo + Antigo)</div>
+                    </div>
+                    <div className="hl-card-bullets">
+                      <div className="hl-bullet">
+                        <span className="hl-bullet-icon">+</span>
+                        <span className="hl-bullet-key">AGEs com 1.ª abertura de Form. Novo esta semana</span>
+                        <span className="hl-bullet-val hl-teal-txt">{firstTimers.length} AGE{firstTimers.length !== 1 ? 's' : ''}</span>
+                      </div>
+                      <div className="hl-bullet">
+                        <span className="hl-bullet-icon">◎</span>
+                        <span className="hl-bullet-key">Taxa adoção global acumulada (até {fmtDate(data.maxDate)})</span>
+                        <span className="hl-bullet-val">{fmt(data.kpis.adoption_rate, '%')}</span>
+                      </div>
+                      <div className="hl-bullet">
+                        <span className="hl-bullet-icon">⚠</span>
+                        <span className="hl-bullet-key">AGEs sem Form. Novo mas com Form. Antigo</span>
+                        <span className="hl-bullet-val hl-warn-txt">{neverNovo.length} AGE{neverNovo.length !== 1 ? 's' : ''}</span>
+                      </div>
+                    </div>
+                    <div className="hl-card-note">Inclui todos os canais elegíveis · Baseado na data limite selecionada</div>
+                  </div>
+
+                  {/* CARD 2 — GD */}
+                  <div className="hl-card hl-navy">
+                    <div className="hl-card-header">
+                      <div className="hl-card-label">% Gestão Direta</div>
+                      <div className="hl-card-value">{fmt(data.kpis.gd_rate_global, '%')}</div>
+                      <div className="hl-card-sub">todos os casos elegíveis (abertos e encerrados)</div>
+                    </div>
+                    <div className="hl-card-bullets">
+                      <div className="hl-bullet">
+                        <span className="hl-bullet-icon">◎</span>
+                        <span className="hl-bullet-key">%GD todos os casos vs. encerrados</span>
+                        <span className="hl-bullet-val">{fmt(data.kpis.gd_rate_global, '%')} → {fmt(data.kpis.gd_rate_closed, '%')}</span>
+                      </div>
+                      <div className="hl-bullet">
+                        <span className="hl-bullet-icon">●</span>
+                        <span className="hl-bullet-key">%GD Form. Novo (encerrados)</span>
+                        <span className="hl-bullet-val hl-teal-txt">{fmt(data.kpis.gd_rate_novo_closed, '%')}</span>
+                      </div>
+                      <div className="hl-bullet">
+                        <span className="hl-bullet-icon">●</span>
+                        <span className="hl-bullet-key">%GD Form. Antigo (encerrados)</span>
+                        <span className="hl-bullet-val hl-pink-txt">{fmt(data.kpis.gd_rate_antigo_closed, '%')}</span>
+                      </div>
+                    </div>
+                    <div className="hl-card-note">% GD = processos sem peritagem / total · Encerrados = com data de fecho</div>
+                  </div>
+
+                  {/* CARD 3 — LT */}
+                  <div className="hl-card hl-orange">
+                    <div className="hl-card-header">
+                      <div className="hl-card-label">Lead Time Piloto</div>
+                      <div className="hl-card-value">{fmt(data.kpis.avg_lt_total, ' dias')}</div>
+                      <div className="hl-card-sub">
+                        casos encerrados (dias úteis)&nbsp;·&nbsp;
+                        Ref. 2025: {LT_REF_2025} d&nbsp;
+                        {ltDelta !== null && <span className={ltDelta > 0 ? 'hl-warn-txt' : 'hl-teal-txt'}>({ltDelta > 0 ? '+' : ''}{ltDelta} d)</span>}
+                      </div>
+                    </div>
+                    <div className="hl-card-bullets">
+                      <div className="hl-bullet">
+                        <span className="hl-bullet-icon">●</span>
+                        <span className="hl-bullet-key">LT Form. Novo (enc.) vs. Form. Antigo (enc.)</span>
+                        <span className="hl-bullet-val">
+                          <span className="hl-teal-txt">{fmt(ltNovo, ' d')}</span>
+                          {' vs. '}
+                          <span className="hl-pink-txt">{fmt(ltAntigo, ' d')}</span>
+                        </span>
+                      </div>
+                      <div className="hl-bullet">
+                        <span className="hl-bullet-icon">◎</span>
+                        <span className="hl-bullet-key">LT Abertura → Aceitação (Form. Novo, enc.)</span>
+                        <span className="hl-bullet-val hl-teal-txt">{fmt(ltOANovo, ' dias')}</span>
+                      </div>
+                    </div>
+                    <div className="hl-card-note">Apenas casos encerrados · dias úteis · LT total = data participação → data fecho</div>
+                  </div>
+
+                </div>
+              </div>
+            );
+          })()}
+
           {/* RESUMO GLOBAL */}
           <div className="report-page">
             <div className="section-title">Resumo Global do Piloto</div>
@@ -528,12 +658,35 @@ export default function ReportPage() {
         .lt-charts-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 1rem; }
         .chart-label { font-size: 0.75rem; font-weight: 600; color: #374151; margin-bottom: 0.25rem; }
         .outside-alert { display: flex; align-items: center; background: #fef3c7; border: 1px solid #fde68a; border-radius: 10px; padding: 0.75rem 1.25rem; margin-top: 1rem; }
+
+        /* Highlights slide */
+        .highlights-page {}
+        .highlights-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 1rem; margin-top: 1rem; }
+        .hl-card { border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; border: 1px solid #e5e7eb; }
+        .hl-card-header { padding: 1rem 1.25rem 0.875rem; }
+        .hl-card-label { font-size: 0.7rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; opacity: 0.75; margin-bottom: 0.35rem; }
+        .hl-card-value { font-size: 2.4rem; font-weight: 800; line-height: 1; margin-bottom: 0.35rem; }
+        .hl-card-sub { font-size: 0.68rem; opacity: 0.75; line-height: 1.35; }
+        .hl-teal .hl-card-header { background: #0d9488; color: white; }
+        .hl-navy .hl-card-header { background: #00305E; color: white; }
+        .hl-orange .hl-card-header { background: #d97706; color: white; }
+        .hl-card-bullets { flex: 1; padding: 0.875rem 1.25rem; display: flex; flex-direction: column; gap: 0.6rem; background: white; }
+        .hl-bullet { display: flex; align-items: baseline; gap: 0.4rem; font-size: 0.75rem; color: #374151; }
+        .hl-bullet-icon { font-size: 0.6rem; color: #9ca3af; flex-shrink: 0; width: 0.75rem; text-align: center; }
+        .hl-bullet-key { flex: 1; color: #6b7280; }
+        .hl-bullet-val { font-weight: 700; font-size: 0.8rem; color: #111827; white-space: nowrap; }
+        .hl-teal-txt { color: #0d9488; }
+        .hl-pink-txt { color: #E8007D; }
+        .hl-warn-txt { color: #d97706; }
+        .hl-navy-txt { color: #00305E; }
+        .hl-card-note { padding: 0.5rem 1.25rem 0.625rem; font-size: 0.62rem; color: #9ca3af; border-top: 1px solid #f3f4f6; background: #fafafa; font-style: italic; }
+
         @media print {
           .no-print { display: none !important; }
           body { background: white !important; }
           .report-container { margin: 0; padding: 0; max-width: 100%; }
           .report-page { box-shadow: none; border-radius: 0; margin: 0; page-break-after: always; border: none; }
-          .cover-page, .badge-good, .badge-warn, .kpi-box, .adoption-highlight, .wave-stat, .total-row, .outside-alert { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          .cover-page, .badge-good, .badge-warn, .kpi-box, .adoption-highlight, .wave-stat, .total-row, .outside-alert, .hl-card-header, .hl-card-note { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
         }
       `}</style>
     </div>

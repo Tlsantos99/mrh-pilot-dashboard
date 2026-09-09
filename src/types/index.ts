@@ -128,6 +128,9 @@ export interface SummaryKPIs {
   gd_rate_global: number;
   gd_rate_novo: number;
   gd_rate_antigo: number;
+  gd_rate_closed: number;
+  gd_rate_novo_closed: number;
+  gd_rate_antigo_closed: number;
   total_gd: number;
   total_peritagem: number;
   closed_gd_count: number;
@@ -141,6 +144,7 @@ export interface SummaryKPIs {
   avg_lt_gd: number | null;
   avg_lt_expertise: number | null;
   avg_lt_opening_acceptance: number | null;
+  avg_lt_opening_acceptance_novo: number | null;
 }
 
 export interface DataQualityIssue {
