@@ -88,8 +88,9 @@ function DashboardContent() {
     ? (kpis.gd_rate_novo / kpis.gd_rate_antigo).toFixed(1)
     : null;
 
-  const lastUpdateStr = Object.values(lastUpdate)[0]
-    ? new Date(Object.values(lastUpdate)[0]).toLocaleString('pt-PT')
+  const allTimestamps = Object.values(lastUpdate).filter(Boolean);
+  const lastUpdateStr = allTimestamps.length > 0
+    ? new Date(allTimestamps.reduce((a, b) => a > b ? a : b)).toLocaleString('pt-PT')
     : '—';
 
   return (

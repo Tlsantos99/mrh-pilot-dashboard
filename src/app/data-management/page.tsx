@@ -283,23 +283,35 @@ export default function DataManagementPage() {
               {result.status === 'success' ? '✓ Importação concluída' :
                result.status === 'duplicate' ? '⚠ Ficheiro duplicado' : '✕ Erro na importação'}
             </p>
-            <button onClick={reset} className="px-4 py-1.5 text-sm font-medium text-white bg-[#00305E] rounded-lg hover:bg-[#004080]">
-              Novo upload
-            </button>
+            <div className="flex gap-2">
+              {result.status === 'success' && (
+                <a href="/dashboard" className="px-4 py-1.5 text-sm font-medium text-[#00305E] border border-[#00305E] rounded-lg hover:bg-blue-50 transition">
+                  Ver dashboard ↗
+                </a>
+              )}
+              <button onClick={reset} className="px-4 py-1.5 text-sm font-medium text-white bg-[#00305E] rounded-lg hover:bg-[#004080]">
+                Novo upload
+              </button>
+            </div>
           </div>
           {result.status === 'success' && (
-            <div className="grid grid-cols-3 gap-3">
-              {[
-                { label: 'Recebidas', value: result.rowsReceived ?? 0 },
-                { label: 'Inseridas', value: result.rowsInserted ?? 0, color: 'text-green-700' },
-                { label: 'Rejeitadas', value: result.rowsRejected ?? 0, color: (result.rowsRejected ?? 0) > 0 ? 'text-red-600' : 'text-gray-400' },
-              ].map(({ label, value, color = 'text-gray-700' }) => (
-                <div key={label} className="bg-gray-50 rounded-lg p-3 text-center">
-                  <p className="text-xs text-gray-400">{label}</p>
-                  <p className={`text-xl font-bold ${color}`}>{value.toLocaleString('pt-PT')}</p>
-                </div>
-              ))}
-            </div>
+            <>
+              <div className="grid grid-cols-3 gap-3">
+                {[
+                  { label: 'Recebidas', value: result.rowsReceived ?? 0 },
+                  { label: 'Inseridas', value: result.rowsInserted ?? 0, color: 'text-green-700' },
+                  { label: 'Rejeitadas', value: result.rowsRejected ?? 0, color: (result.rowsRejected ?? 0) > 0 ? 'text-red-600' : 'text-gray-400' },
+                ].map(({ label, value, color = 'text-gray-700' }) => (
+                  <div key={label} className="bg-gray-50 rounded-lg p-3 text-center">
+                    <p className="text-xs text-gray-400">{label}</p>
+                    <p className={`text-xl font-bold ${color}`}>{value.toLocaleString('pt-PT')}</p>
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs text-gray-400 mt-2">
+                Os dados do dashboard atualizam quando navegares para lá — não precisas de fazer refresh manual.
+              </p>
+            </>
           )}
           {(result.message || result.error) && (
             <p className="text-sm text-gray-500 mt-2">{result.message ?? result.error}</p>

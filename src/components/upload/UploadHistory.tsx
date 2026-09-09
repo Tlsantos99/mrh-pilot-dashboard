@@ -24,7 +24,7 @@ export default function UploadHistory() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch('/api/history')
+    fetch('/api/history', { cache: 'no-store' })
       .then(r => r.json())
       .then(({ data: d }) => { setData(d ?? []); setLoading(false); })
       .catch(() => setLoading(false));
