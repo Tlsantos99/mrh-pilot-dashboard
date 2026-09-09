@@ -50,6 +50,44 @@ const FILE_TYPE_LABELS: Record<FileType, string> = {
   chamadas: 'Chamadas Linha Agentes',
 };
 
+function RetransformButton() {
+  const [state, setState] = useState<'idle' | 'running' | 'done' | 'error'>('idle');
+  const [msg, setMsg] = useState('');
+
+  const run = async () => {
+    setState('running');
+    setMsg('');
+    try {
+      const res = await fetch('/api/admin/retransform', { method: 'POST' });
+      const data = await res.json();
+      if (data.ok) { setState('done'); setMsg(`${data.processed} ocorrências processadas.`); }
+      else { setState('error'); setMsg(data.error ?? 'Erro desconhecido'); }
+    } catch (e) {
+      setState('error');
+      setMsg(String(e));
+    }
+  };
+
+  return (
+    <div className="card p-5 border border-dashed border-gray-200">
+      <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Manutenção</p>
+      <div className="flex items-center gap-4">
+        <button
+          onClick={run}
+          disabled={state === 'running'}
+          className="px-4 py-2 text-sm font-medium text-white bg-[#00305E] rounded-lg hover:bg-[#004080] disabled:opacity-50 transition"
+        >
+          {state === 'running' ? 'A processar...' : 'Re-processar ocorrências'}
+        </button>
+        {msg && (
+          <p className={`text-sm ${state === 'error' ? 'text-red-600' : 'text-green-700'}`}>{msg}</p>
+        )}
+      </div>
+      <p className="text-xs text-gray-400 mt-2">Reconstrói a tabela de ocorrências a partir dos dados de staging. Usar após importar novos ficheiros.</p>
+    </div>
+  );
+}
+
 export default function DataManagementPage() {
   const [file, setFile] = useState<File | null>(null);
   const [manualType, setManualType] = useState<FileType | ''>('');
@@ -479,6 +517,9 @@ export default function DataManagementPage() {
         <h2 className="text-base font-semibold text-[#00305E] mb-4">Histórico de Uploads</h2>
         <UploadHistory key={historyKey} />
       </div>
+
+      {/* Admin: Re-processar occurrences */}
+      <RetransformButton />
     </div>
   );
 }
