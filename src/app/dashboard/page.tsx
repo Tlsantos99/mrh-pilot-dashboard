@@ -76,7 +76,38 @@ function DashboardContent() {
 
   if (loading) return <LoadingState message="A carregar dashboard..." />;
 
-  if (noData) {
+  // With a date filter active and no results, show the dashboard shell with a warning banner
+  // (so the user can still clear the date filter)
+  if (noData && max_date) {
+    return (
+      <div className="space-y-8">
+        <div id="resumo" className="flex flex-wrap items-center justify-between gap-4 scroll-mt-4">
+          <div>
+            <h1 className="text-2xl font-bold text-[#00305E]">Dashboard Piloto MRH</h1>
+            <p className="text-sm text-gray-500 mt-0.5">Danos por Água e Riscos Elétricos — Ageas Portugal</p>
+          </div>
+          <div className="flex items-center gap-6">
+            <div className="flex items-center gap-2">
+              <label htmlFor="max-date-filter" className="text-xs text-gray-500 whitespace-nowrap">Data limite</label>
+              <input
+                id="max-date-filter"
+                type="date"
+                value={max_date ?? ''}
+                onChange={e => setMaxDate(e.target.value)}
+                className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-[#00305E]/20 focus:border-[#00305E]"
+              />
+              <button onClick={() => setMaxDate('')} className="text-xs text-gray-400 hover:text-gray-600 transition" title="Remover filtro de data">✕</button>
+            </div>
+          </div>
+        </div>
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-6 py-4 text-sm text-amber-800">
+          Sem ocorrências elegíveis até <strong>{max_date}</strong>. Selecciona uma data posterior ou remove o filtro.
+        </div>
+      </div>
+    );
+  }
+
+  if (noData && !max_date) {
     return (
       <EmptyState
         title="Sem dados disponíveis"
