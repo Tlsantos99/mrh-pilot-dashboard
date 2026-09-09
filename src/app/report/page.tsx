@@ -65,7 +65,8 @@ export default function ReportPage() {
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<ReportData | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const chartInstances = useRef<Record<string, ChartJS>>({});
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const chartInstances = useRef<Record<string, ChartJS<any, any, any>>>({});
 
   async function generate() {
     setLoading(true);
@@ -175,7 +176,7 @@ export default function ReportPage() {
         y: { position: 'left', beginAtZero: true, title: { display: true, text: 'Dias úteis', font: { size: 8 } }, ticks: { font: { size: 8 } } },
         y2: { position: 'right', beginAtZero: true, grid: { drawOnChartArea: false }, title: { display: true, text: 'Ocorrências enc.', font: { size: 8 } }, ticks: { font: { size: 8 }, stepSize: 5 } },
       },
-    } });
+    } as any });
   }
 
   function drawCallsChart(id: string, weekly: WeeklyCall[]) {
@@ -185,11 +186,11 @@ export default function ReportPage() {
     chartInstances.current[id] = new ChartJS(canvas, { type: 'bar', data: {
       labels: weekly.map(w => w.week_label),
       datasets: [
-        { type: 'bar', label: 'Chamadas no horário', data: weekly.map(w => w.within_hours), backgroundColor: '#00B4A0cc', borderRadius: 3, yAxisID: 'y', order: 2 } as any,
-        { type: 'line', label: '% Atendidas', data: weekly.map(w => Math.round(w.answer_rate_within_hours * 10) / 10), borderColor: '#00305E', backgroundColor: '#00305E22', borderWidth: 2, pointRadius: 3, tension: 0.3, yAxisID: 'y1', order: 1 } as any,
-        { type: 'line', label: '% Abandonadas', data: weekly.map(w => w.within_hours > 0 ? Math.round(w.abandoned / w.within_hours * 1000) / 10 : 0), borderColor: '#E8007D', borderWidth: 2, borderDash: [4, 4], pointRadius: 3, tension: 0.3, yAxisID: 'y1', order: 1 } as any,
+        { type: 'bar', label: 'Chamadas no horário', data: weekly.map(w => w.within_hours), backgroundColor: '#00B4A0cc', borderRadius: 3, yAxisID: 'y', order: 2 },
+        { type: 'line', label: '% Atendidas', data: weekly.map(w => Math.round(w.answer_rate_within_hours * 10) / 10), borderColor: '#00305E', backgroundColor: '#00305E22', borderWidth: 2, pointRadius: 3, tension: 0.3, yAxisID: 'y1', order: 1 },
+        { type: 'line', label: '% Abandonadas', data: weekly.map(w => w.within_hours > 0 ? Math.round(w.abandoned / w.within_hours * 1000) / 10 : 0), borderColor: '#E8007D', borderWidth: 2, borderDash: [4, 4], pointRadius: 3, tension: 0.3, yAxisID: 'y1', order: 1 },
       ],
-    }, options: {
+    } as any, options: {
       responsive: true, animation: false,
       interaction: { mode: 'index', intersect: false },
       plugins: { legend: { position: 'top', labels: { font: { size: 10 }, boxWidth: 10 } } },
@@ -198,7 +199,7 @@ export default function ReportPage() {
         y: { position: 'left', beginAtZero: true, title: { display: true, text: 'Chamadas', font: { size: 9 } }, ticks: { font: { size: 9 } } },
         y1: { position: 'right', beginAtZero: true, max: 100, grid: { drawOnChartArea: false }, title: { display: true, text: '%', font: { size: 9 } }, ticks: { font: { size: 9 }, callback: (v: number | string) => `${v}%` } },
       },
-    } });
+    } as any });
   }
 
   const waves = data ? Array.from(new Set(data.agents.map(a => a.wave_number))).sort() : [];
