@@ -11,5 +11,10 @@ export function createServerClient() {
 
   return createClient(supabaseUrl, serviceRoleKey, {
     auth: { autoRefreshToken: false, persistSession: false },
+    global: {
+      // Disable Next.js Data Cache for all Supabase fetch calls
+      fetch: (url: RequestInfo | URL, options: RequestInit = {}) =>
+        fetch(url, { ...options, cache: 'no-store' }),
+    },
   });
 }
