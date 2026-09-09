@@ -15,6 +15,7 @@ const BATCH_SIZE = 500;
 interface ChunkRequest {
   filename: string;
   fileType: FileType;
+  fileHash?: string;
   uploadId: string | null;
   rows: Record<string, unknown>[];
   totalRows: number;
@@ -26,7 +27,7 @@ interface ChunkRequest {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json() as ChunkRequest;
-    const { filename, fileType, rows, totalRows, isLast, cumulativeInserted, cumulativeRejected } = body;
+    const { filename, fileType, fileHash, rows, totalRows, isLast, cumulativeInserted, cumulativeRejected } = body;
     let { uploadId } = body;
     const supabase = createServerClient();
 
@@ -34,7 +35,7 @@ export async function POST(req: NextRequest) {
     if (!uploadId) {
       const { data: rec, error } = await supabase
         .from('upload_history')
-        .insert({ filename, file_type: fileType, rows_received: totalRows, status: 'processing' })
+        .insert({ filename, file_type: fileType, file_hash: fileHash ?? filename, rows_received: totalRows, status: 'processing' })
         .select('id')
         .single();
       if (error || !rec) throw new Error(error?.message ?? 'Cannot create upload record');

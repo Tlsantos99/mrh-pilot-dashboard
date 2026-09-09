@@ -188,6 +188,10 @@ export default function DataManagementPage() {
       let cumulativeInserted = 0;
       let cumulativeRejected = 0;
 
+      // Compute SHA-256 hash client-side so upload_history.file_hash is populated
+      const hashBuffer = await crypto.subtle.digest('SHA-256', uint8);
+      const fileHash = Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+
       setProgress({ sent: 0, total: totalChunks, phase: 'uploading' });
 
       for (let ci = 0; ci < totalChunks; ci++) {
@@ -200,6 +204,7 @@ export default function DataManagementPage() {
           body: JSON.stringify({
             filename: file.name,
             fileType,
+            fileHash,
             uploadId,
             rows: chunkRows,
             totalRows,
