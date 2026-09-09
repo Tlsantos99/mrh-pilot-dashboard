@@ -194,7 +194,7 @@ export default function DataManagementPage() {
         const chunkRows = allRows.slice(ci * CHUNK_SIZE, (ci + 1) * CHUNK_SIZE);
         const isLast = ci === totalChunks - 1;
 
-        const res = await fetch('/api/upload/chunk', {
+        const chunkRes: Response = await fetch('/api/upload/chunk', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -209,12 +209,12 @@ export default function DataManagementPage() {
           }),
         });
 
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+        if (!chunkRes.ok) {
+          const err = await chunkRes.json().catch(() => ({ error: `HTTP ${chunkRes.status}` }));
           throw new Error(err.error ?? `Chunk ${ci + 1} falhou`);
         }
 
-        const data = await res.json();
+        const data = await chunkRes.json();
         uploadId = data.uploadId;
         cumulativeInserted += data.inserted ?? 0;
         cumulativeRejected += data.rejected ?? 0;
