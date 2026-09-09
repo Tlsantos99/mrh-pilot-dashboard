@@ -28,12 +28,25 @@ export async function GET(req: NextRequest) {
     if (e2) throw e2;
     const rows = [...(p1 ?? []), ...(p2 ?? [])];
 
-    // 7-day window ending at max_date (inclusive), or today if no filter
-    // Use string comparison to avoid timezone issues (ISO dates sort lexicographically)
-    const refStr = filters.max_date ?? new Date().toISOString().slice(0, 10);
-    const startD = new Date(refStr + 'T00:00:00Z');
-    startD.setUTCDate(startD.getUTCDate() - 6);
-    const startStr = startD.toISOString().slice(0, 10);
+    // 7-day window ending at max_date (inclusive).
+    // Without max_date, use the latest opening_date in the data so the window
+    // is always relative to the most recent records (not today, which may be
+    // past the data cutoff and would produce an empty window).
+    let refStr = filters.max_date;
+    if (!refStr) {
+      for (const r of rows) {
+        if (r.opening_date) {
+          const d = (r.opening_date as string).slice(0, 10);
+          if (!refStr || d > refStr) refStr = d;
+        }
+      }
+    }
+    let startStr = '';
+    if (refStr) {
+      const startD = new Date(refStr + 'T00:00:00Z');
+      startD.setUTCDate(startD.getUTCDate() - 6);
+      startStr = startD.toISOString().slice(0, 10);
+    }
 
     type Acc = {
       asf_aggregator: string; wave_number: number; wave_name: string;
@@ -57,7 +70,7 @@ export async function GET(req: NextRequest) {
       if (!r.has_expertise) w.gd++;
       if (r.closing_date && r.lt_total != null) w.lt_totals.push(r.lt_total as number);
       // Track last-7-days counts for adoption trend (string comparison is timezone-safe)
-      if (r.opening_date) {
+      if (r.opening_date && refStr && startStr) {
         const odStr = (r.opening_date as string).slice(0, 10);
         if (odStr >= startStr && odStr <= refStr) {
           if (r.channel === 'Formulário Novo') w.novo_7d++;
