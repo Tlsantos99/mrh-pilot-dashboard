@@ -33,6 +33,21 @@ export async function POST(req: NextRequest) {
 
     // First chunk: create upload_history record
     if (!uploadId) {
+      // Check for duplicate file
+      if (fileHash) {
+        const { data: existing } = await supabase
+          .from('upload_history')
+          .select('id, upload_timestamp')
+          .eq('file_hash', fileHash)
+          .maybeSingle();
+        if (existing) {
+          return NextResponse.json(
+            { error: 'Este ficheiro já foi importado anteriormente.', isDuplicate: true, previousUploadId: existing.id },
+            { status: 409 }
+          );
+        }
+      }
+
       const { data: rec, error } = await supabase
         .from('upload_history')
         .insert({ filename, file_type: fileType, file_hash: fileHash ?? filename, rows_received: totalRows, status: 'processing' })
