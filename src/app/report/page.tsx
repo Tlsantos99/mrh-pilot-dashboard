@@ -21,7 +21,7 @@ interface AgentRow {
   agent_code: string; agent_name: string; wave_number: number; wave_name: string;
   total: number; novo: number; antigo: number; email_outro: number;
   adoption_rate: number | null; gd_rate: number | null; avg_lt_total: number | null;
-  novo_7d?: number; antigo_7d?: number;
+  adoption_last7d?: number | null; novo_7d?: number; antigo_7d?: number;
 }
 interface CallTotals {
   total: number; answered: number; answerRate: number;
@@ -206,9 +206,11 @@ export default function ReportPage() {
     const email = agents.reduce((s, a) => s + a.email_outro, 0);
     const total = agents.reduce((s, a) => s + a.total, 0);
     const adoption = (novo + antigo) > 0 ? Math.round(novo / (novo + antigo) * 1000) / 10 : null;
-    const gd = total > 0 ? Math.round(agents.reduce((s, a) => s + (a.gd_rate ?? 0) * a.total, 0) / total * 10) / 10 : null;
+    const novo7d = agents.reduce((s, a) => s + (a.novo_7d ?? 0), 0);
+    const antigo7d = agents.reduce((s, a) => s + (a.antigo_7d ?? 0), 0);
+    const adoption7d = (novo7d + antigo7d) > 0 ? Math.round(novo7d / (novo7d + antigo7d) * 1000) / 10 : null;
     const waveName = agents[0]?.wave_name ?? `Wave ${w}`;
-    return { wave: w, waveName, agents, novo, antigo, email, total, adoption, gd };
+    return { wave: w, waveName, agents, novo, antigo, email, total, adoption, adoption7d };
   });
 
   const fmtDate = (d: string) => new Date(d + 'T12:00:00').toLocaleDateString('pt-PT', { day: '2-digit', month: 'long', year: 'numeric' });
@@ -445,7 +447,7 @@ export default function ReportPage() {
                   <th>Wave</th><th>Mediadoras</th>
                   <th className="num">Form. Novo</th><th className="num">Form. Antigo</th>
                   <th className="num">Email/Outro</th><th className="num">Total</th>
-                  <th className="num">% Adoção</th><th className="num">% GD</th>
+                  <th className="num">% Adoção</th><th className="num">% Adoção 7d</th>
                 </tr>
               </thead>
               <tbody>
@@ -456,7 +458,7 @@ export default function ReportPage() {
                     <td className="num teal">{ws.novo}</td><td className="num pink">{ws.antigo}</td>
                     <td className="num gray">{ws.email}</td><td className="num bold">{ws.total}</td>
                     <td className="num"><span className={`badge ${(ws.adoption ?? 0) >= 50 ? 'badge-good' : 'badge-warn'}`}>{fmt(ws.adoption, '%')}</span></td>
-                    <td className="num">{fmt(ws.gd, '%')}</td>
+                    <td className="num">{ws.adoption7d !== null ? <span className={`badge ${(ws.adoption7d ?? 0) >= 50 ? 'badge-good' : 'badge-warn'}`}>{fmt(ws.adoption7d, '%')}</span> : '—'}</td>
                   </tr>
                 ))}
                 <tr className="total-row">
@@ -466,7 +468,7 @@ export default function ReportPage() {
                   <td className="num gray"><strong>{data.kpis.total_email}</strong></td>
                   <td className="num bold"><strong>{data.kpis.total_eligible}</strong></td>
                   <td className="num"><span className={`badge ${data.kpis.adoption_rate >= 50 ? 'badge-good' : 'badge-warn'}`}>{fmt(data.kpis.adoption_rate, '%')}</span></td>
-                  <td className="num">{fmt(data.kpis.gd_rate_global, '%')}</td>
+                  <td className="num">—</td>
                 </tr>
               </tbody>
             </table>
@@ -481,7 +483,7 @@ export default function ReportPage() {
                 <div className="wave-stat"><span className="wave-stat-label">Form. Novo</span><span className="wave-stat-value teal">{ws.novo}</span></div>
                 <div className="wave-stat"><span className="wave-stat-label">Form. Antigo</span><span className="wave-stat-value pink">{ws.antigo}</span></div>
                 <div className="wave-stat"><span className="wave-stat-label">Taxa Adoção</span><span className={`wave-stat-value ${(ws.adoption ?? 0) >= 50 ? 'teal' : 'warn'}`}>{fmt(ws.adoption, '%')}</span></div>
-                <div className="wave-stat"><span className="wave-stat-label">% GD</span><span className="wave-stat-value navy">{fmt(ws.gd, '%')}</span></div>
+                <div className="wave-stat"><span className="wave-stat-label">Adoção 7d</span><span className={`wave-stat-value ${(ws.adoption7d ?? 0) >= 50 ? 'teal' : 'warn'}`}>{ws.adoption7d !== null ? fmt(ws.adoption7d, '%') : '—'}</span></div>
               </div>
               <table className="report-table" style={{marginTop:'0.75rem'}}>
                 <thead>
@@ -489,13 +491,15 @@ export default function ReportPage() {
                     <th>Mediadora</th>
                     <th className="num">Form. Novo</th><th className="num">Form. Antigo</th>
                     <th className="num">Email/Outro</th><th className="num">Total</th>
-                    <th className="num">% Adoção</th><th className="num">% GD</th><th className="num">LT Médio</th>
+                    <th className="num">% Adoção</th><th className="num">% Adoção 7d</th>
                   </tr>
                 </thead>
                 <tbody>
                   {ws.agents.map(a => {
                     const good = (a.adoption_rate ?? 0) >= 50;
                     const hasAdopt = a.adoption_rate !== null;
+                    const good7d = (a.adoption_last7d ?? 0) >= 50;
+                    const has7d = a.adoption_last7d != null;
                     return (
                       <tr key={a.agent_code}>
                         <td style={{fontWeight:'500'}}>
@@ -505,8 +509,7 @@ export default function ReportPage() {
                         <td className="num teal">{a.novo}</td><td className="num pink">{a.antigo}</td>
                         <td className="num gray">{a.email_outro}</td><td className="num bold">{a.total}</td>
                         <td className="num">{hasAdopt ? <span className={`badge ${good ? 'badge-good' : 'badge-warn'}`}>{fmt(a.adoption_rate, '%')}</span> : '—'}</td>
-                        <td className="num">{fmt(a.gd_rate, '%')}</td>
-                        <td className="num">{fmt(a.avg_lt_total, ' d')}</td>
+                        <td className="num">{has7d ? <span className={`badge ${good7d ? 'badge-good' : 'badge-warn'}`}>{fmt(a.adoption_last7d, '%')}</span> : '—'}</td>
                       </tr>
                     );
                   })}
@@ -515,7 +518,7 @@ export default function ReportPage() {
                     <td className="num teal"><strong>{ws.novo}</strong></td><td className="num pink"><strong>{ws.antigo}</strong></td>
                     <td className="num gray"><strong>{ws.email}</strong></td><td className="num bold"><strong>{ws.total}</strong></td>
                     <td className="num"><span className={`badge ${(ws.adoption ?? 0) >= 50 ? 'badge-good' : 'badge-warn'}`}>{fmt(ws.adoption, '%')}</span></td>
-                    <td className="num">{fmt(ws.gd, '%')}</td><td className="num">—</td>
+                    <td className="num">{ws.adoption7d !== null ? <span className={`badge ${(ws.adoption7d ?? 0) >= 50 ? 'badge-good' : 'badge-warn'}`}>{fmt(ws.adoption7d, '%')}</span> : '—'}</td>
                   </tr>
                 </tbody>
               </table>
