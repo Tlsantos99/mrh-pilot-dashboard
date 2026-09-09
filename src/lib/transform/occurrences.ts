@@ -52,12 +52,24 @@ export async function transformOccurrences(uploadId?: string) {
     if (r.occurrence_id) antigoSet[r.occurrence_id] = r.upload_id;
   }
 
-  // 4. Aggregate staging_global by occurrence_id
-  const { data: globalRows } = await supabase
-    .from('staging_global')
-    .select('*')
-    .order('occurrence_id')
-    .order('process_number');
+  // 4. Aggregate staging_global by occurrence_id — paginate to avoid PostgREST row limit
+  const PAGE_SIZE = 10000;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const globalRows: any[] = [];
+  let from = 0;
+  while (true) {
+    const { data: page, error: pageErr } = await supabase
+      .from('staging_global')
+      .select('*')
+      .order('occurrence_id')
+      .order('process_number')
+      .range(from, from + PAGE_SIZE - 1);
+    if (pageErr) throw new Error(`staging_global page error: ${pageErr.message}`);
+    if (!page || page.length === 0) break;
+    globalRows.push(...page);
+    if (page.length < PAGE_SIZE) break;
+    from += PAGE_SIZE;
+  }
 
   if (!globalRows || globalRows.length === 0) return { processed: 0 };
 
