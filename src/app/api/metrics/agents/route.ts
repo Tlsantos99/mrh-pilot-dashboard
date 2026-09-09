@@ -99,6 +99,8 @@ export async function GET(req: NextRequest) {
         gd_rate: w.total > 0 ? Math.round((w.gd / w.total) * 1000) / 10 : null,
         avg_lt_total: avg(w.lt_totals),
         adoption_last7d: (w.novo_7d + w.antigo_7d) > 0 ? Math.round(w.novo_7d / (w.novo_7d + w.antigo_7d) * 1000) / 10 : null,
+        novo_7d: w.novo_7d,
+        antigo_7d: w.antigo_7d,
       }));
 
     return NextResponse.json({ data });

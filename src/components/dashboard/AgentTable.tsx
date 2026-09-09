@@ -94,10 +94,18 @@ export default function AgentTable({ filters = {} }: Props) {
                       </td>
                       <td className="px-3 py-2 text-right">
                         {a.adoption_last7d !== null && a.adoption_last7d !== undefined ? (
-                          <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${(a.adoption_last7d as number) >= 50 ? 'bg-teal-50 text-teal-700' : 'bg-amber-50 text-amber-700'}`}>
+                          <span
+                            className={`px-1.5 py-0.5 rounded text-xs font-medium cursor-default ${(a.adoption_last7d as number) >= 50 ? 'bg-teal-50 text-teal-700' : 'bg-amber-50 text-amber-700'}`}
+                            title={`${a.novo_7d ?? 0} Novo · ${a.antigo_7d ?? 0} Antigo (últimos 7 dias)`}
+                          >
                             {a.adoption_last7d}%
                           </span>
-                        ) : <span className="text-gray-300">—</span>}
+                        ) : (
+                          <span
+                            className="text-gray-300 cursor-default"
+                            title={`${a.novo_7d ?? 0} Novo · ${a.antigo_7d ?? 0} Antigo (últimos 7 dias)`}
+                          >—</span>
+                        )}
                       </td>
                     </tr>
                   );

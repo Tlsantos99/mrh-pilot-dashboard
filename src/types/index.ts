@@ -102,6 +102,8 @@ export interface AgentPerformance {
   gd_rate?: number;
   avg_lt_total?: number;
   adoption_last7d?: number | null;
+  novo_7d?: number;
+  antigo_7d?: number;
 }
 
 export interface CallCenterWeekly {
