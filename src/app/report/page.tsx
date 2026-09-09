@@ -1,31 +1,46 @@
 'use client';
-import { useState, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import {
+  Chart as ChartJS, CategoryScale, LinearScale,
+  BarElement, BarController, LineElement, LineController,
+  PointElement, Tooltip, Legend,
+} from 'chart.js';
+
+ChartJS.register(CategoryScale, LinearScale, BarElement, BarController, LineElement, LineController, PointElement, Tooltip, Legend);
 
 interface KPIs {
   total_eligible: number; total_novo: number; total_antigo: number; total_email: number;
   adoption_rate: number; gd_rate_global: number; gd_rate_novo: number; gd_rate_antigo: number;
+  total_gd_base: number; total_peritagem_base: number;
+  closed_gd_count_base: number; closed_peritagem_count_base: number;
   avg_lt_total: number | null; avg_lt_gd: number | null; avg_lt_expertise: number | null;
   avg_lt_opening_acceptance: number | null;
 }
-
 interface AgentRow {
   agent_code: string; agent_name: string; wave_number: number; wave_name: string;
   total: number; novo: number; antigo: number; email_outro: number;
   adoption_rate: number | null; gd_rate: number | null; avg_lt_total: number | null;
 }
-
 interface CallTotals {
   total: number; answered: number; answerRate: number;
   withinHoursTotal: number; answeredWithin: number; answerRateWithin: number;
   outsideHours: number; avgDurationMinutes: number;
 }
-
+interface WeeklyCall {
+  year: number; week: number; week_label: string;
+  total_calls: number; within_hours: number; outside_hours: number;
+  answered: number; abandoned: number;
+  answer_rate_within_hours: number; avg_duration_minutes: number;
+}
+interface LtRow {
+  year: number; week: number; week_label: string;
+  channel: string; expertise_type: string;
+  total: number; avg_lt_total: number | null;
+}
 interface ReportData {
-  kpis: KPIs;
-  agents: AgentRow[];
-  calls: CallTotals | null;
-  maxDate: string;
-  generatedAt: string;
+  kpis: KPIs; agents: AgentRow[]; calls: CallTotals | null;
+  weekly: WeeklyCall[]; ltData: LtRow[];
+  maxDate: string; callsMaxDate: string; generatedAt: string;
 }
 
 function fmt(n: number | null | undefined, suffix = '') {
@@ -33,36 +48,46 @@ function fmt(n: number | null | undefined, suffix = '') {
   return `${n}${suffix}`;
 }
 
-function adocaoIcon(rate: number | null): string {
-  if (rate === null) return '—';
-  return rate >= 50 ? '✓' : '⚠';
+// Shared week-label sort
+function sortWeekLabels(labels: string[], source: LtRow[]) {
+  return [...labels].sort((a, b) => {
+    const ar = source.find(d => d.week_label === a);
+    const br = source.find(d => d.week_label === b);
+    if ((ar?.year ?? 0) !== (br?.year ?? 0)) return (ar?.year ?? 0) - (br?.year ?? 0);
+    return (ar?.week ?? 0) - (br?.week ?? 0);
+  });
 }
 
 export default function ReportPage() {
   const today = new Date().toISOString().slice(0, 10);
   const [maxDate, setMaxDate] = useState(today);
+  const [callsMaxDate, setCallsMaxDate] = useState(today);
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<ReportData | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const reportRef = useRef<HTMLDivElement>(null);
+  const chartInstances = useRef<Record<string, ChartJS>>({});
 
   async function generate() {
     setLoading(true);
     setError(null);
     try {
       const qs = `?max_date=${maxDate}`;
-      const [summaryRes, agentsRes, callsRes] = await Promise.all([
+      const callsQS = `?calls_max_date=${callsMaxDate}`;
+      const [sumRes, agRes, callRes, ltRes] = await Promise.all([
         fetch(`/api/metrics/summary${qs}`),
         fetch(`/api/metrics/agents${qs}`),
-        fetch('/api/metrics/calls'),
+        fetch(`/api/metrics/calls${callsQS}`),
+        fetch(`/api/metrics/lead-times${qs}`),
       ]);
-      const { kpis } = await summaryRes.json();
-      const { data: agents } = await agentsRes.json();
-      const { totals: calls } = await callsRes.json();
+      const { kpis } = await sumRes.json();
+      const { data: agents } = await agRes.json();
+      const { totals: calls, weekly } = await callRes.json();
+      const { data: ltData } = await ltRes.json();
       if (!kpis) throw new Error('Sem dados — verifique os filtros.');
       setData({
         kpis, agents: agents ?? [], calls: calls ?? null,
-        maxDate,
+        weekly: weekly ?? [], ltData: ltData ?? [],
+        maxDate, callsMaxDate,
         generatedAt: new Date().toLocaleString('pt-PT'),
       });
     } catch (e) {
@@ -72,12 +97,111 @@ export default function ReportPage() {
     }
   }
 
-  function printReport() {
-    window.print();
+  // Draw all charts when data changes
+  useEffect(() => {
+    if (!data) return;
+
+    // Destroy previous instances
+    Object.values(chartInstances.current).forEach(c => c.destroy());
+    chartInstances.current = {};
+
+    // Draw LT charts
+    if (data.ltData.length > 0) {
+      drawLtChart('lt-all', data.ltData, 'all');
+      drawLtChart('lt-gd', data.ltData, 'gd');
+      drawLtChart('lt-peri', data.ltData, 'peritagem');
+    }
+    // Draw calls chart
+    if (data.weekly.length > 0) {
+      drawCallsChart('calls-chart', data.weekly);
+    }
+  }, [data]);
+
+  function drawLtChart(id: string, ltData: LtRow[], mode: 'all' | 'gd' | 'peritagem') {
+    const canvas = document.getElementById(id) as HTMLCanvasElement | null;
+    if (!canvas) return;
+
+    const allLabels = sortWeekLabels(Array.from(new Set(ltData.map(d => d.week_label))), ltData);
+
+    const ltGdNovo = allLabels.map(w =>
+      ltData.find(d => d.week_label === w && d.expertise_type === 'Gestão Direta' && d.channel === 'Formulário Novo')?.avg_lt_total ?? null
+    );
+    const ltGdAntigo = allLabels.map(w =>
+      ltData.find(d => d.week_label === w && d.expertise_type === 'Gestão Direta' && d.channel === 'Formulário Antigo')?.avg_lt_total ?? null
+    );
+    const ltPeri = allLabels.map(w => {
+      const rows = ltData.filter(d => d.week_label === w && d.expertise_type === 'Peritagem');
+      const valid = rows.filter(r => r.avg_lt_total != null);
+      if (!valid.length) return null;
+      const sum = valid.reduce((s, r) => s + (r.avg_lt_total ?? 0) * r.total, 0);
+      const tot = valid.reduce((s, r) => s + r.total, 0);
+      return tot > 0 ? Math.round(sum / tot * 10) / 10 : null;
+    });
+    // Bars: closed occurrence counts from lead-times data
+    const novoBar = allLabels.map(w =>
+      ltData.filter(d => d.week_label === w && d.channel === 'Formulário Novo' &&
+        (mode === 'all' ? true : mode === 'gd' ? d.expertise_type === 'Gestão Direta' : d.expertise_type === 'Peritagem')
+      ).reduce((s, r) => s + r.total, 0) || null
+    );
+    const antigoBar = allLabels.map(w =>
+      ltData.filter(d => d.week_label === w && d.channel === 'Formulário Antigo' &&
+        (mode === 'all' ? true : mode === 'gd' ? d.expertise_type === 'Gestão Direta' : d.expertise_type === 'Peritagem')
+      ).reduce((s, r) => s + r.total, 0) || null
+    );
+
+    const datasets: object[] = [
+      { type: 'bar', label: 'Form. Novo', data: novoBar, backgroundColor: '#00B4A055', borderColor: '#00B4A0', borderWidth: 1, borderRadius: 2, yAxisID: 'y2', order: 3 },
+      { type: 'bar', label: 'Form. Antigo', data: antigoBar, backgroundColor: '#E8007D44', borderColor: '#E8007D', borderWidth: 1, borderRadius: 2, yAxisID: 'y2', order: 3 },
+    ];
+    if (mode !== 'peritagem') {
+      datasets.push(
+        { type: 'line', label: 'LT GD Novo', data: ltGdNovo, borderColor: '#00B4A0', borderWidth: 2, pointRadius: 2, tension: 0.3, yAxisID: 'y', order: 1, spanGaps: true, backgroundColor: 'transparent' },
+        { type: 'line', label: 'LT GD Antigo', data: ltGdAntigo, borderColor: '#E8007D', borderWidth: 2, borderDash: [4, 3], pointRadius: 2, tension: 0.3, yAxisID: 'y', order: 1, spanGaps: true, backgroundColor: 'transparent' }
+      );
+    }
+    if (mode !== 'gd') {
+      datasets.push(
+        { type: 'line', label: 'LT Peritagem', data: ltPeri, borderColor: '#EF9F27', borderWidth: 2, borderDash: [3, 3], pointRadius: 2, tension: 0.3, yAxisID: 'y', order: 1, spanGaps: true, backgroundColor: 'transparent' }
+      );
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    chartInstances.current[id] = new ChartJS(canvas, { type: 'bar', data: { labels: allLabels, datasets: datasets as any }, options: {
+      responsive: true, animation: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { position: 'top', labels: { font: { size: 8 }, boxWidth: 8, padding: 6 } } },
+      scales: {
+        x: { grid: { display: false }, ticks: { font: { size: 8 }, maxRotation: 45 } },
+        y: { position: 'left', beginAtZero: true, title: { display: true, text: 'Dias úteis', font: { size: 8 } }, ticks: { font: { size: 8 } } },
+        y2: { position: 'right', beginAtZero: true, grid: { drawOnChartArea: false }, title: { display: true, text: 'Ocorrências enc.', font: { size: 8 } }, ticks: { font: { size: 8 }, stepSize: 5 } },
+      },
+    } });
+  }
+
+  function drawCallsChart(id: string, weekly: WeeklyCall[]) {
+    const canvas = document.getElementById(id) as HTMLCanvasElement | null;
+    if (!canvas) return;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    chartInstances.current[id] = new ChartJS(canvas, { type: 'bar', data: {
+      labels: weekly.map(w => w.week_label),
+      datasets: [
+        { type: 'bar', label: 'Chamadas no horário', data: weekly.map(w => w.within_hours), backgroundColor: '#00B4A0cc', borderRadius: 3, yAxisID: 'y', order: 2 } as any,
+        { type: 'line', label: '% Atendidas', data: weekly.map(w => Math.round(w.answer_rate_within_hours * 10) / 10), borderColor: '#00305E', backgroundColor: '#00305E22', borderWidth: 2, pointRadius: 3, tension: 0.3, yAxisID: 'y1', order: 1 } as any,
+        { type: 'line', label: '% Abandonadas', data: weekly.map(w => w.within_hours > 0 ? Math.round(w.abandoned / w.within_hours * 1000) / 10 : 0), borderColor: '#E8007D', borderWidth: 2, borderDash: [4, 4], pointRadius: 3, tension: 0.3, yAxisID: 'y1', order: 1 } as any,
+      ],
+    }, options: {
+      responsive: true, animation: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { position: 'top', labels: { font: { size: 10 }, boxWidth: 10 } } },
+      scales: {
+        x: { grid: { display: false }, ticks: { font: { size: 9 } } },
+        y: { position: 'left', beginAtZero: true, title: { display: true, text: 'Chamadas', font: { size: 9 } }, ticks: { font: { size: 9 } } },
+        y1: { position: 'right', beginAtZero: true, max: 100, grid: { drawOnChartArea: false }, title: { display: true, text: '%', font: { size: 9 } }, ticks: { font: { size: 9 }, callback: (v: number | string) => `${v}%` } },
+      },
+    } });
   }
 
   const waves = data ? Array.from(new Set(data.agents.map(a => a.wave_number))).sort() : [];
-
   const waveStats = waves.map(w => {
     const agents = data!.agents.filter(a => a.wave_number === w);
     const novo = agents.reduce((s, a) => s + a.novo, 0);
@@ -90,41 +214,38 @@ export default function ReportPage() {
     return { wave: w, waveName, agents, novo, antigo, email, total, adoption, gd };
   });
 
-  const maxDateLabel = data ? new Date(data.maxDate + 'T12:00:00').toLocaleDateString('pt-PT', { day: '2-digit', month: 'long', year: 'numeric' }) : '';
+  const fmtDate = (d: string) => new Date(d + 'T12:00:00').toLocaleDateString('pt-PT', { day: '2-digit', month: 'long', year: 'numeric' });
 
   return (
     <div className="min-h-screen bg-gray-100">
-      {/* Controls bar — hidden on print */}
-      <div className="no-print bg-[#00305E] text-white px-6 py-4 flex items-center gap-6 sticky top-0 z-50 shadow-lg">
-        <div>
-          <h1 className="font-bold text-lg">Gerador de Report</h1>
-          <p className="text-xs text-blue-200">Status Piloto Agentes — Formulário Novo</p>
+      {/* Controls — hidden on print */}
+      <div className="no-print bg-[#00305E] text-white px-6 py-3 flex flex-wrap items-center gap-4 sticky top-0 z-50 shadow-lg">
+        <div className="shrink-0">
+          <h1 className="font-bold text-base leading-none">Gerador de Report</h1>
+          <p className="text-xs text-blue-200 mt-0.5">Status Piloto Agentes — Form. Novo</p>
         </div>
-        <div className="flex items-center gap-3 ml-auto">
-          <label className="text-sm text-blue-100">Data de corte:</label>
-          <input
-            type="date"
-            value={maxDate}
-            onChange={e => setMaxDate(e.target.value)}
-            max={today}
-            className="px-3 py-1.5 rounded-lg text-[#00305E] text-sm font-medium bg-white"
-          />
-          <button
-            onClick={generate}
-            disabled={loading}
-            className="px-5 py-2 bg-[#00B4A0] text-white text-sm font-semibold rounded-lg hover:bg-teal-600 disabled:opacity-50 transition"
-          >
+        <div className="flex flex-wrap items-center gap-3 ml-auto">
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-blue-100 whitespace-nowrap">Corte piloto:</span>
+            <input type="date" value={maxDate} onChange={e => setMaxDate(e.target.value)} max={today}
+              className="px-2.5 py-1.5 rounded-lg text-[#00305E] text-sm font-medium bg-white" />
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-blue-100 whitespace-nowrap">Corte chamadas:</span>
+            <input type="date" value={callsMaxDate} onChange={e => setCallsMaxDate(e.target.value)} max={today}
+              className="px-2.5 py-1.5 rounded-lg text-[#00305E] text-sm font-medium bg-white" />
+          </div>
+          <button onClick={generate} disabled={loading}
+            className="px-4 py-1.5 bg-[#00B4A0] text-white text-sm font-semibold rounded-lg hover:bg-teal-600 disabled:opacity-50 transition">
             {loading ? 'A gerar…' : 'Gerar Report'}
           </button>
           {data && (
-            <button
-              onClick={printReport}
-              className="px-5 py-2 bg-white text-[#00305E] text-sm font-semibold rounded-lg hover:bg-blue-50 transition"
-            >
+            <button onClick={() => window.print()}
+              className="px-4 py-1.5 bg-white text-[#00305E] text-sm font-semibold rounded-lg hover:bg-blue-50 transition">
               Exportar PDF
             </button>
           )}
-          <a href="/dashboard" className="text-xs text-blue-200 hover:text-white underline ml-2">← Dashboard</a>
+          <a href="/dashboard" className="text-xs text-blue-200 hover:text-white underline">← Dashboard</a>
         </div>
       </div>
 
@@ -136,16 +257,13 @@ export default function ReportPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
             </div>
-            <p className="text-gray-500 font-medium">Seleciona a data de corte e clica em <strong>Gerar Report</strong></p>
-            <p className="text-gray-400 text-sm mt-1">O report irá incluir todos os dados até essa data</p>
+            <p className="text-gray-500 font-medium">Define as datas de corte e clica em <strong>Gerar Report</strong></p>
+            <p className="text-gray-400 text-sm mt-1">Podes usar datas de corte diferentes para o piloto e para as chamadas</p>
           </div>
         </div>
       )}
 
-      {error && (
-        <div className="max-w-xl mx-auto mt-12 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">{error}</div>
-      )}
-
+      {error && <div className="max-w-xl mx-auto mt-12 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">{error}</div>}
       {loading && (
         <div className="flex items-center justify-center h-[60vh]">
           <div className="text-center">
@@ -156,13 +274,14 @@ export default function ReportPage() {
       )}
 
       {data && (
-        <div ref={reportRef} className="report-container">
-          {/* ─── CAPA ─── */}
+        <div className="report-container">
+          {/* CAPA */}
           <div className="report-page cover-page">
             <div className="cover-logo">TOM HOUSEHOLD | PHASE 2</div>
             <div className="cover-title">STATUS PILOTO AGENTES<br />FORMULÁRIO NOVO</div>
             <div className="cover-meta">
-              <div>Dados até: <strong>{maxDateLabel}</strong></div>
+              <div>Dados piloto até: <strong>{fmtDate(data.maxDate)}</strong></div>
+              <div>Dados chamadas até: <strong>{fmtDate(data.callsMaxDate)}</strong></div>
               <div>Gerado em: {data.generatedAt}</div>
               <div>Ramo: Riscos Múltiplos — Habitação</div>
             </div>
@@ -174,7 +293,7 @@ export default function ReportPage() {
             </div>
           </div>
 
-          {/* ─── RESUMO GLOBAL ─── */}
+          {/* RESUMO GLOBAL */}
           <div className="report-page">
             <div className="section-title">Resumo Global do Piloto</div>
             <div className="kpi-grid-4">
@@ -183,32 +302,24 @@ export default function ReportPage() {
               <div className="kpi-box pink"><div className="kpi-label">Formulário Antigo</div><div className="kpi-value">{data.kpis.total_antigo}</div></div>
               <div className="kpi-box gray"><div className="kpi-label">Email / Outro</div><div className="kpi-value">{data.kpis.total_email}</div></div>
             </div>
-
             <div className="adoption-highlight">
               <div className="adoption-big">{fmt(data.kpis.adoption_rate, '%')}</div>
               <div className="adoption-label">Taxa de Adoção Global<br /><span style={{fontWeight:'normal',fontSize:'0.75rem'}}>Formulário Novo / (Novo + Antigo)</span></div>
             </div>
-
             <div className="kpi-grid-4" style={{marginTop:'1rem'}}>
               <div className="kpi-box navy"><div className="kpi-label">% GD Global</div><div className="kpi-value">{fmt(data.kpis.gd_rate_global, '%')}</div></div>
               <div className="kpi-box teal"><div className="kpi-label">% GD Novo Form.</div><div className="kpi-value">{fmt(data.kpis.gd_rate_novo, '%')}</div></div>
               <div className="kpi-box pink"><div className="kpi-label">% GD Antigo Form.</div><div className="kpi-value">{fmt(data.kpis.gd_rate_antigo, '%')}</div></div>
               <div className="kpi-box orange"><div className="kpi-label">LT Médio GD</div><div className="kpi-value">{fmt(data.kpis.avg_lt_gd, ' d')}</div></div>
             </div>
-
-            {/* Wave summary table */}
             <div className="section-subtitle" style={{marginTop:'1.5rem'}}>Resumo por Wave</div>
             <table className="report-table">
               <thead>
                 <tr>
-                  <th>Wave</th>
-                  <th>Mediadoras</th>
-                  <th className="num">Form. Novo</th>
-                  <th className="num">Form. Antigo</th>
-                  <th className="num">Email/Outro</th>
-                  <th className="num">Total</th>
-                  <th className="num">% Adoção</th>
-                  <th className="num">% GD</th>
+                  <th>Wave</th><th>Mediadoras</th>
+                  <th className="num">Form. Novo</th><th className="num">Form. Antigo</th>
+                  <th className="num">Email/Outro</th><th className="num">Total</th>
+                  <th className="num">% Adoção</th><th className="num">% GD</th>
                 </tr>
               </thead>
               <tbody>
@@ -216,15 +327,9 @@ export default function ReportPage() {
                   <tr key={ws.wave}>
                     <td style={{fontWeight:'600',color:'#00305E'}}>{ws.waveName}</td>
                     <td>{ws.agents.length}</td>
-                    <td className="num teal">{ws.novo}</td>
-                    <td className="num pink">{ws.antigo}</td>
-                    <td className="num gray">{ws.email}</td>
-                    <td className="num bold">{ws.total}</td>
-                    <td className="num">
-                      <span className={`badge ${(ws.adoption ?? 0) >= 50 ? 'badge-good' : 'badge-warn'}`}>
-                        {fmt(ws.adoption, '%')}
-                      </span>
-                    </td>
+                    <td className="num teal">{ws.novo}</td><td className="num pink">{ws.antigo}</td>
+                    <td className="num gray">{ws.email}</td><td className="num bold">{ws.total}</td>
+                    <td className="num"><span className={`badge ${(ws.adoption ?? 0) >= 50 ? 'badge-good' : 'badge-warn'}`}>{fmt(ws.adoption, '%')}</span></td>
                     <td className="num">{fmt(ws.gd, '%')}</td>
                   </tr>
                 ))}
@@ -241,7 +346,7 @@ export default function ReportPage() {
             </table>
           </div>
 
-          {/* ─── POR WAVE: TABELA MEDIADORA ─── */}
+          {/* POR WAVE */}
           {waveStats.map(ws => (
             <div key={ws.wave} className="report-page">
               <div className="section-title">Adoção por Mediadora — {ws.waveName}</div>
@@ -250,42 +355,30 @@ export default function ReportPage() {
                 <div className="wave-stat"><span className="wave-stat-label">Form. Novo</span><span className="wave-stat-value teal">{ws.novo}</span></div>
                 <div className="wave-stat"><span className="wave-stat-label">Form. Antigo</span><span className="wave-stat-value pink">{ws.antigo}</span></div>
                 <div className="wave-stat"><span className="wave-stat-label">Taxa Adoção</span><span className={`wave-stat-value ${(ws.adoption ?? 0) >= 50 ? 'teal' : 'warn'}`}>{fmt(ws.adoption, '%')}</span></div>
-                <div className="wave-stat"><span className="wave-stat-label">% GD Novo</span><span className="wave-stat-value navy">{fmt(ws.gd, '%')}</span></div>
+                <div className="wave-stat"><span className="wave-stat-label">% GD</span><span className="wave-stat-value navy">{fmt(ws.gd, '%')}</span></div>
               </div>
               <table className="report-table" style={{marginTop:'0.75rem'}}>
                 <thead>
                   <tr>
                     <th>Mediadora</th>
-                    <th className="num">Form. Novo</th>
-                    <th className="num">Form. Antigo</th>
-                    <th className="num">Email/Outro</th>
-                    <th className="num">Total</th>
-                    <th className="num">% Adoção</th>
-                    <th className="num">% GD</th>
-                    <th className="num">LT Médio</th>
+                    <th className="num">Form. Novo</th><th className="num">Form. Antigo</th>
+                    <th className="num">Email/Outro</th><th className="num">Total</th>
+                    <th className="num">% Adoção</th><th className="num">% GD</th><th className="num">LT Médio</th>
                   </tr>
                 </thead>
                 <tbody>
                   {ws.agents.map(a => {
                     const good = (a.adoption_rate ?? 0) >= 50;
-                    const hasAdoption = a.adoption_rate !== null;
+                    const hasAdopt = a.adoption_rate !== null;
                     return (
                       <tr key={a.agent_code}>
                         <td style={{fontWeight:'500'}}>
-                          <span className={hasAdoption ? (good ? 'icon-good' : 'icon-warn') : 'icon-na'}>
-                            {hasAdoption ? (good ? '✓' : '⚠') : '—'}
-                          </span>
+                          <span className={hasAdopt ? (good ? 'icon-good' : 'icon-warn') : 'icon-na'}>{hasAdopt ? (good ? '✓' : '⚠') : '—'}</span>
                           {' '}{a.agent_name ?? a.agent_code}
                         </td>
-                        <td className="num teal">{a.novo}</td>
-                        <td className="num pink">{a.antigo}</td>
-                        <td className="num gray">{a.email_outro}</td>
-                        <td className="num bold">{a.total}</td>
-                        <td className="num">
-                          {hasAdoption ? (
-                            <span className={`badge ${good ? 'badge-good' : 'badge-warn'}`}>{fmt(a.adoption_rate, '%')}</span>
-                          ) : '—'}
-                        </td>
+                        <td className="num teal">{a.novo}</td><td className="num pink">{a.antigo}</td>
+                        <td className="num gray">{a.email_outro}</td><td className="num bold">{a.total}</td>
+                        <td className="num">{hasAdopt ? <span className={`badge ${good ? 'badge-good' : 'badge-warn'}`}>{fmt(a.adoption_rate, '%')}</span> : '—'}</td>
                         <td className="num">{fmt(a.gd_rate, '%')}</td>
                         <td className="num">{fmt(a.avg_lt_total, ' d')}</td>
                       </tr>
@@ -293,13 +386,10 @@ export default function ReportPage() {
                   })}
                   <tr className="total-row">
                     <td><strong>Total {ws.waveName}</strong></td>
-                    <td className="num teal"><strong>{ws.novo}</strong></td>
-                    <td className="num pink"><strong>{ws.antigo}</strong></td>
-                    <td className="num gray"><strong>{ws.email}</strong></td>
-                    <td className="num bold"><strong>{ws.total}</strong></td>
+                    <td className="num teal"><strong>{ws.novo}</strong></td><td className="num pink"><strong>{ws.antigo}</strong></td>
+                    <td className="num gray"><strong>{ws.email}</strong></td><td className="num bold"><strong>{ws.total}</strong></td>
                     <td className="num"><span className={`badge ${(ws.adoption ?? 0) >= 50 ? 'badge-good' : 'badge-warn'}`}>{fmt(ws.adoption, '%')}</span></td>
-                    <td className="num">{fmt(ws.gd, '%')}</td>
-                    <td className="num">—</td>
+                    <td className="num">{fmt(ws.gd, '%')}</td><td className="num">—</td>
                   </tr>
                 </tbody>
               </table>
@@ -310,7 +400,7 @@ export default function ReportPage() {
             </div>
           ))}
 
-          {/* ─── LEAD TIMES ─── */}
+          {/* LEAD TIMES */}
           <div className="report-page">
             <div className="section-title">Lead Times — Casos Encerrados</div>
             <div className="kpi-grid-4">
@@ -319,56 +409,83 @@ export default function ReportPage() {
               <div className="kpi-box pink"><div className="kpi-label">LT Peritagem</div><div className="kpi-value">{fmt(data.kpis.avg_lt_expertise, ' d')}</div></div>
               <div className="kpi-box orange"><div className="kpi-label">LT Abertura→Aceit.</div><div className="kpi-value">{fmt(data.kpis.avg_lt_opening_acceptance, ' d')}</div></div>
             </div>
-            <div className="insight-box" style={{marginTop:'1.5rem'}}>
-              <p>
-                <strong>Potencial de Gestão Direta:</strong> {fmt(data.kpis.gd_rate_novo, '%')} nos sinistros por Formulário Novo vs.{' '}
-                {fmt(data.kpis.gd_rate_antigo, '%')} no Formulário Antigo.{' '}
-                {data.kpis.gd_rate_antigo && data.kpis.gd_rate_novo && data.kpis.gd_rate_antigo > 0
-                  ? `O novo formulário tem ${(data.kpis.gd_rate_novo / data.kpis.gd_rate_antigo).toFixed(1)}x mais potencial de GD.`
-                  : ''}
-              </p>
+            <div className="kpi-grid-4" style={{marginTop:'0.75rem'}}>
+              <div className="kpi-box teal"><div className="kpi-label">Ocorrências GD</div><div className="kpi-value">{fmt(data.kpis.total_gd_base)}</div><div className="kpi-sub">{fmt(data.kpis.closed_gd_count_base)} encerradas</div></div>
+              <div className="kpi-box orange"><div className="kpi-label">Ocorrências Peritagem</div><div className="kpi-value">{fmt(data.kpis.total_peritagem_base)}</div><div className="kpi-sub">{fmt(data.kpis.closed_peritagem_count_base)} encerradas</div></div>
+              <div className="kpi-box gray" style={{gridColumn:'span 2'}}>
+                <div className="kpi-label" style={{textAlign:'left'}}>Potencial GD</div>
+                <div style={{fontSize:'0.85rem',color:'#374151',marginTop:'0.25rem'}}>
+                  {data.kpis.gd_rate_novo && data.kpis.gd_rate_antigo && data.kpis.gd_rate_antigo > 0
+                    ? `Novo Form. tem ${(data.kpis.gd_rate_novo / data.kpis.gd_rate_antigo).toFixed(1)}x mais potencial GD (${fmt(data.kpis.gd_rate_novo, '%')} vs ${fmt(data.kpis.gd_rate_antigo, '%')})`
+                    : '—'}
+                </div>
+              </div>
             </div>
+
+            {data.ltData.length > 0 && (
+              <div style={{marginTop:'1.5rem'}}>
+                <div className="lt-charts-grid">
+                  <div>
+                    <p className="chart-label">Todos os casos</p>
+                    <canvas id="lt-all" height={160} />
+                  </div>
+                  <div>
+                    <p className="chart-label">Gestão Direta</p>
+                    <canvas id="lt-gd" height={160} />
+                  </div>
+                  <div>
+                    <p className="chart-label">Peritagem</p>
+                    <canvas id="lt-peri" height={160} />
+                  </div>
+                </div>
+                <p className="legend-row" style={{marginTop:'0.5rem'}}>Linhas = LT médio em dias úteis (eixo esq.) · Barras = ocorrências encerradas por semana (eixo dir.)</p>
+              </div>
+            )}
           </div>
 
-          {/* ─── LINHA DE APOIO ─── */}
+          {/* LINHA DE APOIO */}
           {data.calls && data.calls.total > 0 && (
             <div className="report-page">
-              <div className="section-title">Linha de Apoio Agentes</div>
-              <div className="section-subtitle">Horário de funcionamento: 08h45 – 16h45</div>
-              <div className="kpi-grid-4" style={{marginTop:'1rem'}}>
-                <div className="kpi-box navy"><div className="kpi-label">Total Chamadas</div><div className="kpi-value">{data.calls.total}</div></div>
-                <div className="kpi-box teal"><div className="kpi-label">% Atendidas (total)</div><div className="kpi-value">{fmt(data.calls.answerRate, '%')}</div></div>
-                <div className="kpi-box teal"><div className="kpi-label">% Atendidas (horário)</div><div className="kpi-value">{fmt(data.calls.answerRateWithin, '%')}</div></div>
-                <div className="kpi-box orange"><div className="kpi-label">Fora de Horário</div><div className="kpi-value">{data.calls.outsideHours}</div></div>
+              <div className="section-title">Linha de Apoio Agentes — Volume de Chamadas</div>
+              <div className="section-subtitle">Dados até {fmtDate(data.callsMaxDate)} · Horário de funcionamento: 08h45 – 16h45</div>
+              <div className="kpi-grid-3" style={{marginTop:'1rem'}}>
+                <div className="kpi-box teal">
+                  <div className="kpi-value" style={{fontSize:'2rem',color:'#00B4A0'}}>{data.calls.withinHoursTotal}</div>
+                  <div className="kpi-label">chamadas totais no horário</div>
+                </div>
+                <div className="kpi-box navy">
+                  <div className="kpi-value" style={{fontSize:'2rem',color:'#00305E'}}>{fmt(data.calls.answerRateWithin, '%')}</div>
+                  <div className="kpi-label">chamadas atendidas no horário</div>
+                  <div className="kpi-sub">{(100 - data.calls.answerRateWithin).toFixed(1)}% não atendidas</div>
+                </div>
+                <div className="kpi-box pink">
+                  <div className="kpi-value" style={{fontSize:'2rem',color:'#E8007D'}}>{fmt(data.calls.avgDurationMinutes, ' min')}</div>
+                  <div className="kpi-label">duração média / chamada</div>
+                </div>
               </div>
-              <div style={{textAlign:'center', marginTop:'1rem', fontSize:'0.85rem', color:'#6b7280'}}>
-                Duração média por chamada: <strong>{fmt(data.calls.avgDurationMinutes, ' min')}</strong>
-              </div>
+
+              {data.weekly.length > 0 && (
+                <div style={{marginTop:'1.5rem'}}>
+                  <p className="chart-label" style={{marginBottom:'0.5rem'}}>Atendimento Semanal — Dentro do Horário (08h45 – 16h45)</p>
+                  <canvas id="calls-chart" height={120} />
+                </div>
+              )}
+
+              {data.calls.outsideHours > 0 && (
+                <div className="outside-alert">
+                  <span style={{fontSize:'1.5rem',fontWeight:'800',color:'#d97706'}}>{data.calls.outsideHours}</span>
+                  <span style={{marginLeft:'0.75rem',fontSize:'0.9rem',fontWeight:'600',color:'#92400e'}}>Chamadas Fora do Horário de Atendimento</span>
+                </div>
+              )}
             </div>
           )}
         </div>
       )}
 
       <style>{`
-        .report-container {
-          font-family: 'Inter', system-ui, sans-serif;
-          max-width: 960px;
-          margin: 2rem auto;
-          padding: 0 1rem 4rem;
-        }
-        .report-page {
-          background: white;
-          border-radius: 12px;
-          padding: 2rem;
-          margin-bottom: 1.5rem;
-          box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-        }
-        .cover-page {
-          background: #00305E;
-          color: white;
-          text-align: center;
-          padding: 3rem 2rem;
-        }
+        .report-container { font-family: 'Inter', system-ui, sans-serif; max-width: 960px; margin: 2rem auto; padding: 0 1rem 4rem; }
+        .report-page { background: white; border-radius: 12px; padding: 2rem; margin-bottom: 1.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+        .cover-page { background: #00305E; color: white; text-align: center; padding: 3rem 2rem; }
         .cover-logo { font-size: 0.8rem; letter-spacing: 0.15em; color: #93c5fd; margin-bottom: 2rem; font-weight: 500; }
         .cover-title { font-size: 2rem; font-weight: 800; line-height: 1.2; margin-bottom: 2rem; }
         .cover-meta { font-size: 0.9rem; color: #bfdbfe; line-height: 2; margin-bottom: 2rem; }
@@ -377,14 +494,14 @@ export default function ReportPage() {
         .section-title { font-size: 1.1rem; font-weight: 700; color: #00305E; margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 2px solid #e5e7eb; }
         .section-subtitle { font-size: 0.8rem; color: #6b7280; margin-bottom: 0.5rem; }
         .kpi-grid-4 { display: grid; grid-template-columns: repeat(4,1fr); gap: 0.75rem; }
+        .kpi-grid-3 { display: grid; grid-template-columns: repeat(3,1fr); gap: 0.75rem; }
         .kpi-box { border-radius: 10px; padding: 1rem; text-align: center; }
-        .kpi-box.navy { background: #eff6ff; }
-        .kpi-box.teal { background: #f0fdfa; }
-        .kpi-box.pink { background: #fdf2f8; }
-        .kpi-box.orange { background: #fffbeb; }
+        .kpi-box.navy { background: #eff6ff; } .kpi-box.teal { background: #f0fdfa; }
+        .kpi-box.pink { background: #fdf2f8; } .kpi-box.orange { background: #fffbeb; }
         .kpi-box.gray { background: #f9fafb; }
         .kpi-label { font-size: 0.7rem; color: #6b7280; margin-bottom: 0.25rem; }
         .kpi-value { font-size: 1.5rem; font-weight: 700; color: #00305E; }
+        .kpi-sub { font-size: 0.65rem; color: #9ca3af; margin-top: 0.2rem; }
         .adoption-highlight { display: flex; align-items: center; gap: 1.5rem; background: #f0fdfa; border-radius: 10px; padding: 1.25rem 1.5rem; margin-top: 1rem; }
         .adoption-big { font-size: 3rem; font-weight: 800; color: #00B4A0; line-height: 1; }
         .adoption-label { font-size: 0.9rem; color: #374151; font-weight: 600; line-height: 1.4; }
@@ -392,35 +509,28 @@ export default function ReportPage() {
         .report-table th { background: #f1f5f9; color: #374151; font-weight: 600; padding: 0.5rem 0.75rem; text-align: left; }
         .report-table th.num { text-align: right; }
         .report-table td { padding: 0.45rem 0.75rem; border-bottom: 1px solid #f1f5f9; color: #374151; }
-        .report-table td.num { text-align: right; }
-        .report-table td.teal { color: #00B4A0; font-weight: 600; }
-        .report-table td.pink { color: #E8007D; }
-        .report-table td.gray { color: #9ca3af; }
-        .report-table td.bold { font-weight: 700; }
-        .report-table .total-row { background: #eff6ff; font-weight: 700; }
+        .report-table td.num { text-align: right; } .report-table td.teal { color: #00B4A0; font-weight: 600; }
+        .report-table td.pink { color: #E8007D; } .report-table td.gray { color: #9ca3af; }
+        .report-table td.bold { font-weight: 700; } .report-table .total-row { background: #eff6ff; font-weight: 700; }
         .badge { padding: 0.15rem 0.5rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 600; }
-        .badge-good { background: #d1fae5; color: #065f46; }
-        .badge-warn { background: #fef3c7; color: #92400e; }
-        .icon-good { color: #059669; font-weight: 700; }
-        .icon-warn { color: #d97706; font-weight: 700; }
-        .icon-na { color: #9ca3af; }
+        .badge-good { background: #d1fae5; color: #065f46; } .badge-warn { background: #fef3c7; color: #92400e; }
+        .icon-good { color: #059669; font-weight: 700; } .icon-warn { color: #d97706; font-weight: 700; } .icon-na { color: #9ca3af; }
         .legend-row { margin-top: 0.5rem; font-size: 0.7rem; color: #6b7280; }
         .wave-header-row { display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 0.5rem; }
         .wave-stat { display: flex; flex-direction: column; background: #f9fafb; border-radius: 8px; padding: 0.5rem 0.75rem; min-width: 90px; }
         .wave-stat-label { font-size: 0.65rem; color: #9ca3af; }
         .wave-stat-value { font-size: 1.1rem; font-weight: 700; color: #00305E; }
-        .wave-stat-value.teal { color: #00B4A0; }
-        .wave-stat-value.pink { color: #E8007D; }
-        .wave-stat-value.warn { color: #d97706; }
-        .wave-stat-value.navy { color: #00305E; }
-        .insight-box { background: #eff6ff; border-left: 3px solid #00305E; border-radius: 6px; padding: 0.75rem 1rem; font-size: 0.85rem; color: #374151; }
+        .wave-stat-value.teal { color: #00B4A0; } .wave-stat-value.pink { color: #E8007D; }
+        .wave-stat-value.warn { color: #d97706; } .wave-stat-value.navy { color: #00305E; }
+        .lt-charts-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 1rem; }
+        .chart-label { font-size: 0.75rem; font-weight: 600; color: #374151; margin-bottom: 0.25rem; }
+        .outside-alert { display: flex; align-items: center; background: #fef3c7; border: 1px solid #fde68a; border-radius: 10px; padding: 0.75rem 1.25rem; margin-top: 1rem; }
         @media print {
           .no-print { display: none !important; }
           body { background: white !important; }
           .report-container { margin: 0; padding: 0; max-width: 100%; }
           .report-page { box-shadow: none; border-radius: 0; margin: 0; page-break-after: always; border: none; }
-          .cover-page { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-          .badge-good, .badge-warn, .kpi-box, .adoption-highlight, .insight-box, .wave-stat, .total-row { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          .cover-page, .badge-good, .badge-warn, .kpi-box, .adoption-highlight, .wave-stat, .total-row, .outside-alert { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
         }
       `}</style>
     </div>
