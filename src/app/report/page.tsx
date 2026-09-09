@@ -292,24 +292,25 @@ export default function ReportPage() {
 
           {/* HIGHLIGHTS */}
           {(() => {
+            const rd = data!;
             // 7-day adoption from agents
-            const total7dNovo = data.agents.reduce((s, a) => s + (a.novo_7d ?? 0), 0);
-            const total7dAntigo = data.agents.reduce((s, a) => s + (a.antigo_7d ?? 0), 0);
+            const total7dNovo = rd.agents.reduce((s, a) => s + (a.novo_7d ?? 0), 0);
+            const total7dAntigo = rd.agents.reduce((s, a) => s + (a.antigo_7d ?? 0), 0);
             const adoption7d = (total7dNovo + total7dAntigo) > 0
               ? Math.round(total7dNovo / (total7dNovo + total7dAntigo) * 1000) / 10 : null;
-            // Agents opening new form for the first time this week (all novo activity is from this window)
-            const firstTimers = data.agents.filter(a => (a.novo_7d ?? 0) > 0 && a.novo === (a.novo_7d ?? 0));
+            // Agents opening new form for the first time this week
+            const firstTimers = rd.agents.filter(a => (a.novo_7d ?? 0) > 0 && a.novo === (a.novo_7d ?? 0));
             // Agents that never opened new form but have antigo (need intervention)
-            const neverNovo = data.agents.filter(a => a.novo === 0 && a.antigo > 0);
+            const neverNovo = rd.agents.filter(a => a.novo === 0 && a.antigo > 0);
             // Weighted LT by channel from ltData
             function ltByChannel(ch: string) {
-              const rows = data.ltData.filter(d => d.channel === ch && d.avg_lt_total != null);
+              const rows = rd.ltData.filter(r => r.channel === ch && r.avg_lt_total != null);
               const totalW = rows.reduce((s, r) => s + r.total, 0);
               if (!totalW) return null;
               return Math.round(rows.reduce((s, r) => s + (r.avg_lt_total ?? 0) * r.total, 0) / totalW * 10) / 10;
             }
             function ltOAByChannel(ch: string) {
-              const rows = data.ltData.filter(d => d.channel === ch && d.avg_lt_opening_acceptance != null);
+              const rows = rd.ltData.filter(r => r.channel === ch && r.avg_lt_opening_acceptance != null);
               const totalW = rows.reduce((s, r) => s + r.total, 0);
               if (!totalW) return null;
               return Math.round(rows.reduce((s, r) => s + (r.avg_lt_opening_acceptance ?? 0) * r.total, 0) / totalW * 10) / 10;
@@ -318,15 +319,15 @@ export default function ReportPage() {
             const ltAntigo = ltByChannel('Formulário Antigo');
             const ltOANovo = ltOAByChannel('Formulário Novo');
             const LT_REF_2025 = 33.6;
-            const ltDelta = data.kpis.avg_lt_total != null ? Math.round((data.kpis.avg_lt_total - LT_REF_2025) * 10) / 10 : null;
+            const ltDelta = rd.kpis.avg_lt_total != null ? Math.round((rd.kpis.avg_lt_total - LT_REF_2025) * 10) / 10 : null;
             // 7-day window label
-            const refD = new Date(data.maxDate + 'T12:00:00');
+            const refD = new Date(rd.maxDate + 'T12:00:00');
             const startD = new Date(refD); startD.setDate(startD.getDate() - 6);
-            const fmtShort = (d: Date) => d.toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit' });
+            const fmtShort = (dt: Date) => dt.toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit' });
             return (
               <div className="report-page highlights-page">
                 <div className="section-title">Destaques da Semana</div>
-                <div className="section-subtitle">Dados piloto até {fmtDate(data.maxDate)} · Janela de referência: {fmtShort(startD)} – {fmtShort(refD)}</div>
+                <div className="section-subtitle">Dados piloto até {fmtDate(rd.maxDate)} · Janela de referência: {fmtShort(startD)} – {fmtShort(refD)}</div>
                 <div className="highlights-grid">
 
                   {/* CARD 1 — Adoção */}
@@ -344,8 +345,8 @@ export default function ReportPage() {
                       </div>
                       <div className="hl-bullet">
                         <span className="hl-bullet-icon">◎</span>
-                        <span className="hl-bullet-key">Taxa adoção global acumulada (até {fmtDate(data.maxDate)})</span>
-                        <span className="hl-bullet-val">{fmt(data.kpis.adoption_rate, '%')}</span>
+                        <span className="hl-bullet-key">Taxa adoção global acumulada (até {fmtDate(rd.maxDate)})</span>
+                        <span className="hl-bullet-val">{fmt(rd.kpis.adoption_rate, '%')}</span>
                       </div>
                       <div className="hl-bullet">
                         <span className="hl-bullet-icon">⚠</span>
@@ -360,24 +361,24 @@ export default function ReportPage() {
                   <div className="hl-card hl-navy">
                     <div className="hl-card-header">
                       <div className="hl-card-label">% Gestão Direta</div>
-                      <div className="hl-card-value">{fmt(data.kpis.gd_rate_global, '%')}</div>
+                      <div className="hl-card-value">{fmt(rd.kpis.gd_rate_global, '%')}</div>
                       <div className="hl-card-sub">todos os casos elegíveis (abertos e encerrados)</div>
                     </div>
                     <div className="hl-card-bullets">
                       <div className="hl-bullet">
                         <span className="hl-bullet-icon">◎</span>
                         <span className="hl-bullet-key">%GD todos os casos vs. encerrados</span>
-                        <span className="hl-bullet-val">{fmt(data.kpis.gd_rate_global, '%')} → {fmt(data.kpis.gd_rate_closed, '%')}</span>
+                        <span className="hl-bullet-val">{fmt(rd.kpis.gd_rate_global, '%')} → {fmt(rd.kpis.gd_rate_closed, '%')}</span>
                       </div>
                       <div className="hl-bullet">
                         <span className="hl-bullet-icon">●</span>
                         <span className="hl-bullet-key">%GD Form. Novo (encerrados)</span>
-                        <span className="hl-bullet-val hl-teal-txt">{fmt(data.kpis.gd_rate_novo_closed, '%')}</span>
+                        <span className="hl-bullet-val hl-teal-txt">{fmt(rd.kpis.gd_rate_novo_closed, '%')}</span>
                       </div>
                       <div className="hl-bullet">
                         <span className="hl-bullet-icon">●</span>
                         <span className="hl-bullet-key">%GD Form. Antigo (encerrados)</span>
-                        <span className="hl-bullet-val hl-pink-txt">{fmt(data.kpis.gd_rate_antigo_closed, '%')}</span>
+                        <span className="hl-bullet-val hl-pink-txt">{fmt(rd.kpis.gd_rate_antigo_closed, '%')}</span>
                       </div>
                     </div>
                     <div className="hl-card-note">% GD = processos sem peritagem / total · Encerrados = com data de fecho</div>
@@ -387,7 +388,7 @@ export default function ReportPage() {
                   <div className="hl-card hl-orange">
                     <div className="hl-card-header">
                       <div className="hl-card-label">Lead Time Piloto</div>
-                      <div className="hl-card-value">{fmt(data.kpis.avg_lt_total, ' dias')}</div>
+                      <div className="hl-card-value">{fmt(rd.kpis.avg_lt_total, ' dias')}</div>
                       <div className="hl-card-sub">
                         casos encerrados (dias úteis)&nbsp;·&nbsp;
                         Ref. 2025: {LT_REF_2025} d&nbsp;
