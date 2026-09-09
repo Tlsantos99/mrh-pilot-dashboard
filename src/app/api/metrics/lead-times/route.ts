@@ -30,7 +30,7 @@ export async function GET(req: NextRequest) {
     const SEL = 'channel,has_expertise,lt_total,lt_opening_acceptance,closing_date';
     const makeQ = () =>
       supabase.from('occurrences').select(SEL)
-        .eq('eligible_for_pilot', true).eq('is_event', false)
+        .eq('eligible_for_pilot', true)
         .eq('branch', 'Riscos Múltiplos-Habitação')
         .not('closing_date', 'is', null);
 

@@ -21,12 +21,12 @@ export async function GET(req: NextRequest) {
 
     const makeQ = () =>
       supabase.from('occurrences').select(SEL)
-        .eq('eligible_for_pilot', true).eq('is_event', false)
+        .eq('eligible_for_pilot', true)
         .eq('branch', 'Riscos Múltiplos-Habitação');
 
     const makeQBase = () =>
       supabase.from('occurrences').select(SEL_BASE)
-        .eq('eligible_for_pilot', true).eq('is_event', false)
+        .eq('eligible_for_pilot', true)
         .eq('branch', 'Riscos Múltiplos-Habitação');
 
     const [p1, p2, b1, b2, refresh] = await Promise.all([

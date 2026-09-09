@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
     const SEL = 'asf_aggregator,wave_number,wave_name,channel,has_expertise,lt_total,closing_date,opening_week_label,opening_year,opening_week';
     const makeQ = () =>
       supabase.from('occurrences').select(SEL)
-        .eq('eligible_for_pilot', true).eq('is_event', false)
+        .eq('eligible_for_pilot', true)
         .eq('branch', 'Riscos Múltiplos-Habitação');
 
     const [{ data: p1, error: e1 }, { data: p2, error: e2 }] = await Promise.all([

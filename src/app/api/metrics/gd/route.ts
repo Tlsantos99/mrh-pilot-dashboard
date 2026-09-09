@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
     const SEL = 'opening_year,opening_week,opening_week_label,channel,has_expertise';
     const makeQ = () =>
       supabase.from('occurrences').select(SEL)
-        .eq('eligible_for_pilot', true).eq('is_event', false)
+        .eq('eligible_for_pilot', true)
         .eq('branch', 'Riscos Múltiplos-Habitação')
         .not('opening_week_label', 'is', null)
         .in('channel', ['Formulário Novo', 'Formulário Antigo']);
