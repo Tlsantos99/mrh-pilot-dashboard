@@ -2,6 +2,7 @@ interface KPICardProps {
   label: string;
   value: string | number;
   sub?: string;
+  tooltip?: string;
   color?: 'navy' | 'pink' | 'teal' | 'orange' | 'green';
   size?: 'sm' | 'md' | 'lg';
 }
@@ -20,10 +21,18 @@ const sizeMap = {
   lg: 'text-4xl',
 };
 
-export default function KPICard({ label, value, sub, color = 'navy', size = 'md' }: KPICardProps) {
+export default function KPICard({ label, value, sub, tooltip, color = 'navy', size = 'md' }: KPICardProps) {
   return (
     <div className={`kpi-card border-l-4 ${colorMap[color]}`}>
-      <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">{label}</p>
+      <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-1">
+        {label}
+        {tooltip && (
+          <span
+            className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-gray-200 text-gray-500 text-[9px] cursor-help leading-none shrink-0"
+            title={tooltip}
+          >ⓘ</span>
+        )}
+      </p>
       <p className={`font-bold ${sizeMap[size]} ${colorMap[color].split(' ')[1]}`}>{value}</p>
       {sub && <p className="text-xs text-gray-400 mt-1">{sub}</p>}
     </div>
