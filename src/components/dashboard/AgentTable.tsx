@@ -22,7 +22,7 @@ export default function AgentTable({ filters = {} }: Props) {
         setLoading(false);
       })
       .catch(() => setLoading(false));
-  }, [filters.wave, filters.channel, filters.expertise]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [filters.wave, filters.channel, filters.expertise, filters.max_date]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (loading) return <LoadingState />;
   if (!data.length) return <EmptyState title="Sem dados de AGEs" />;

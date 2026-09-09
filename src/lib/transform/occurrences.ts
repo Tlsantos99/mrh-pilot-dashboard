@@ -186,19 +186,46 @@ export async function transformOccurrences(uploadId?: string) {
     });
   }
 
-  // Upsert in batches of 500
+  // Sanitize: replace NaN/Infinity with null in all numeric fields
+  const sanitize = (obj: Record<string, unknown>) => {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(obj)) {
+      if (typeof v === 'number' && !isFinite(v)) out[k] = null;
+      else out[k] = v;
+    }
+    return out;
+  };
+
+  const sanitizedBatch = upsertBatch.map(sanitize);
+
+  // Upsert in batches of 500; on batch error, fall back to row-by-row to skip bad rows
   const BATCH_SIZE = 500;
   let processed = 0;
-  for (let i = 0; i < upsertBatch.length; i += BATCH_SIZE) {
-    const batch = upsertBatch.slice(i, i + BATCH_SIZE);
+  let skipped = 0;
+  for (let i = 0; i < sanitizedBatch.length; i += BATCH_SIZE) {
+    const batch = sanitizedBatch.slice(i, i + BATCH_SIZE);
     const { error } = await supabase
       .from('occurrences')
       .upsert(batch, { onConflict: 'occurrence_id' });
-    if (error) throw new Error(`Transform error: ${error.message}`);
-    processed += batch.length;
+    if (error) {
+      // Batch failed — retry row by row to isolate bad rows
+      for (const row of batch) {
+        const { error: rowErr } = await supabase
+          .from('occurrences')
+          .upsert([row], { onConflict: 'occurrence_id' });
+        if (rowErr) {
+          console.error(`Transform: skipped occurrence ${row.occurrence_id}: ${rowErr.message}`);
+          skipped++;
+        } else {
+          processed++;
+        }
+      }
+    } else {
+      processed += batch.length;
+    }
   }
 
-  return { processed };
+  return { processed, skipped };
 }
 
 export async function syncAgentsFromStaging() {

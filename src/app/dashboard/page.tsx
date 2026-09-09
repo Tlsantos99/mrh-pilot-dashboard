@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState, useCallback, Suspense } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import KPICard from '@/components/ui/KPICard';
 import SectionHeader from '@/components/ui/SectionHeader';
 import LoadingState from '@/components/ui/LoadingState';
@@ -25,17 +25,26 @@ export default function DashboardPage() {
 }
 
 function DashboardContent() {
+  const router = useRouter();
   const sp = useSearchParams();
   const wave = sp.get('wave') ?? undefined;
   const channel = sp.get('channel') ?? undefined;
   const expertise = sp.get('expertise') ?? undefined;
   const status = sp.get('status') ?? undefined;
-  const filters: DashboardFilters = { wave, channel, expertise, status };
+  const max_date = sp.get('max_date') ?? undefined;
+  const filters: DashboardFilters = { wave, channel, expertise, status, max_date };
 
   const [kpis, setKpis] = useState<SummaryKPIs | null>(null);
   const [lastUpdate, setLastUpdate] = useState<LastUpdate>({});
   const [loading, setLoading] = useState(true);
   const [noData, setNoData] = useState(false);
+
+  const setMaxDate = (val: string) => {
+    const p = new URLSearchParams(sp.toString());
+    if (val) p.set('max_date', val);
+    else p.delete('max_date');
+    router.push(`/dashboard${p.toString() ? `?${p.toString()}` : ''}`);
+  };
 
   const loadSummary = useCallback(async () => {
     setLoading(true);
@@ -45,6 +54,7 @@ function DashboardContent() {
       if (channel) p.set('channel', channel);
       if (expertise) p.set('expertise', expertise);
       if (status) p.set('status', status);
+      if (max_date) p.set('max_date', max_date);
       const qs = p.toString();
       const res = await fetch(`/api/metrics/summary${qs ? `?${qs}` : ''}`);
       const { kpis: data, lastUpdate: lu } = await res.json() as { kpis: import('@/types').SummaryKPIs; lastUpdate: Record<string, string> };
@@ -60,7 +70,7 @@ function DashboardContent() {
     } finally {
       setLoading(false);
     }
-  }, [wave, channel, expertise, status]);
+  }, [wave, channel, expertise, status, max_date]);
 
   useEffect(() => { loadSummary(); }, [loadSummary]);
 
@@ -96,14 +106,38 @@ function DashboardContent() {
   return (
     <div className="space-y-8">
       {/* Header */}
-      <div id="resumo" className="flex items-center justify-between scroll-mt-4">
+      <div id="resumo" className="flex flex-wrap items-center justify-between gap-4 scroll-mt-4">
         <div>
           <h1 className="text-2xl font-bold text-[#00305E]">Dashboard Piloto MRH</h1>
           <p className="text-sm text-gray-500 mt-0.5">Danos por Água e Riscos Elétricos — Ageas Portugal</p>
         </div>
-        <div className="text-right">
-          <p className="text-xs text-gray-400">Última atualização</p>
-          <p className="text-sm font-medium text-gray-600">{lastUpdateStr}</p>
+        <div className="flex items-center gap-6">
+          {/* Date limit filter */}
+          <div className="flex items-center gap-2">
+            <label htmlFor="max-date-filter" className="text-xs text-gray-500 whitespace-nowrap">
+              Data limite
+            </label>
+            <input
+              id="max-date-filter"
+              type="date"
+              value={max_date ?? ''}
+              onChange={e => setMaxDate(e.target.value)}
+              className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-[#00305E]/20 focus:border-[#00305E]"
+            />
+            {max_date && (
+              <button
+                onClick={() => setMaxDate('')}
+                className="text-xs text-gray-400 hover:text-gray-600 transition"
+                title="Remover filtro de data"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+          <div className="text-right">
+            <p className="text-xs text-gray-400">Última atualização</p>
+            <p className="text-sm font-medium text-gray-600">{lastUpdateStr}</p>
+          </div>
         </div>
       </div>
 
