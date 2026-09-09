@@ -81,9 +81,9 @@ export async function GET(req: NextRequest) {
       .map(w => {
         const lw = w.weekly.get(lastWeekLabel) ?? { novo: 0, antigo: 0 };
         let novo4 = 0, antigo4 = 0;
-        for (const [label, wd] of w.weekly) {
+        w.weekly.forEach((wd, label) => {
           if (last4Labels.has(label)) { novo4 += wd.novo; antigo4 += wd.antigo; }
-        }
+        });
         return {
           agent_code: w.asf_aggregator,
           agent_name: w.asf_aggregator,
