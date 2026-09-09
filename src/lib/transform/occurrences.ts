@@ -8,6 +8,7 @@ import { createServerClient } from '@/lib/supabase/server';
 interface AgentMap {
   [agentCode: string]: {
     normalized_name: string | null;
+    asf_aggregator: string | null;
     wave_number: number | null;
     wave_name: string | null;
     wave_start_date: string | null;
@@ -23,7 +24,7 @@ export async function transformOccurrences(uploadId?: string) {
   // 1. Load agent map
   const { data: agentRows } = await supabase
     .from('agents')
-    .select('agent_code, normalized_name, wave_number, wave_name, wave_start_date');
+    .select('agent_code, normalized_name, asf_aggregator, wave_number, wave_name, wave_start_date');
 
   const agentMap: AgentMap = {};
   for (const a of agentRows ?? []) {
@@ -151,6 +152,7 @@ export async function transformOccurrences(uploadId?: string) {
       main_process_id: mainProcess.process_number,
       agent_code: agentCode,
       agent_name: agent?.normalized_name ?? null,
+      asf_aggregator: agent?.asf_aggregator ?? null,
       wave_number: agent?.wave_number ?? null,
       wave_name: agent?.wave_name ?? null,
       wave_start_date: agent?.wave_start_date ?? null,
