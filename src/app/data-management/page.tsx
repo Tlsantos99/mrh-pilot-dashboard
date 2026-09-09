@@ -3,6 +3,19 @@ import { useState, useCallback } from 'react';
 import UploadHistory from '@/components/upload/UploadHistory';
 import type { FileType } from '@/types';
 
+const LARGE_FILE_THRESHOLD = 3 * 1024 * 1024; // 3 MB → bypass server validate, use chunked upload
+const CHUNK_SIZE = 1000; // rows per API call
+
+function quickDetectType(filename: string): FileType | null {
+  const f = filename.replace(/.*[/\\]/, '');
+  if (/^FicheiroGlobal/i.test(f)) return 'global';
+  if (/^Report_|^Agregador_Piloto/i.test(f)) return 'piloto';
+  if (/^Participaç/i.test(f)) return 'antigo';
+  if (/^Agentes_Piloto/i.test(f)) return 'agentes';
+  if (/^Chamadas/i.test(f)) return 'chamadas';
+  return null;
+}
+
 interface ValidationResult {
   isDuplicateFile?: boolean;
   fileType?: string;
@@ -46,13 +59,53 @@ export default function DataManagementPage() {
   const [validation, setValidation] = useState<ValidationResult | null>(null);
   const [result, setResult] = useState<ProcessResult | null>(null);
   const [historyKey, setHistoryKey] = useState(0);
+  const [isLargeFile, setIsLargeFile] = useState(false);
+  const [progress, setProgress] = useState<{ sent: number; total: number; phase: 'parsing' | 'uploading' } | null>(null);
 
   const handleFile = useCallback(async (f: File) => {
     setFile(f);
     setValidation(null);
     setResult(null);
-    setValidating(true);
+    setIsLargeFile(false);
 
+    if (f.size > LARGE_FILE_THRESHOLD) {
+      // Large file: parse headers client-side (avoid 413 on validate endpoint)
+      setIsLargeFile(true);
+      setValidating(true);
+      try {
+        const XLSX = await import('xlsx');
+        const uint8 = new Uint8Array(await f.arrayBuffer());
+        const wb = XLSX.read(uint8, { type: 'array', cellDates: false });
+        const isChamadas = f.name.toLowerCase().includes('chamadas');
+        const sheetName = isChamadas
+          ? (wb.SheetNames.find((s: string) => s.includes('OneReport')) ?? wb.SheetNames[0])
+          : wb.SheetNames[0];
+        const sheet = wb.Sheets[sheetName];
+        if (!sheet?.['!ref']) throw new Error('Folha sem dados');
+        const range = XLSX.utils.decode_range(sheet['!ref']);
+        const headerRow = isChamadas ? 3 : 0;
+        const totalRows = Math.max(0, range.e.r - headerRow);
+        const detectedType = (manualType || quickDetectType(f.name)) as FileType | null;
+        const sizeMB = (f.size / 1024 / 1024).toFixed(1);
+        setValidation({
+          fileType: detectedType ?? undefined,
+          rowsFound: totalRows,
+          rowsNew: totalRows,
+          rowsDuplicate: 0,
+          ready: !!detectedType,
+          errors: detectedType ? [] : ['Tipo não identificado — seleciona manualmente.'],
+          warnings: [`Ficheiro grande (${sizeMB} MB) — será importado por chunks (~${Math.ceil(totalRows / CHUNK_SIZE)} chamadas API).`],
+        });
+      } catch (e) {
+        setValidation({ errors: [`Erro ao ler ficheiro: ${e instanceof Error ? e.message : String(e)}`], ready: false });
+      } finally {
+        setValidating(false);
+      }
+      return;
+    }
+
+    // Small file: server-side validate
+    setValidating(true);
     try {
       const fd = new FormData();
       fd.append('file', f);
@@ -65,7 +118,6 @@ export default function DataManagementPage() {
       } catch {
         data = { errors: [`Erro de rede ou timeout (HTTP ${res.status}). O ficheiro pode ser demasiado grande ou o servidor demorou demasiado.`], ready: false };
       }
-      // Surface API-level errors into the errors array so they're always visible
       if (data.error && !data.errors?.length) {
         data = { ...data, errors: [data.error, ...(data.detail ? [`Detalhe: ${data.detail}`] : [])] };
       }
@@ -84,16 +136,14 @@ export default function DataManagementPage() {
     if (f) handleFile(f);
   }, [handleFile]);
 
-  const handleImport = async () => {
+  const handleRegularImport = async () => {
     if (!file || !validation?.ready) return;
     setProcessing(true);
     setResult(null);
-
     try {
       const fd = new FormData();
       fd.append('file', file);
       if (manualType) fd.append('fileType', manualType);
-
       const res = await fetch('/api/upload/process', { method: 'POST', body: fd });
       const data = await res.json();
       setResult(data);
@@ -109,11 +159,90 @@ export default function DataManagementPage() {
     }
   };
 
+  const handleChunkedImport = async () => {
+    if (!file || !validation?.ready) return;
+    const fileType = (manualType || validation.fileType) as FileType;
+    if (!fileType) return;
+    setProcessing(true);
+    setResult(null);
+    setProgress({ sent: 0, total: 1, phase: 'parsing' });
+
+    try {
+      // Parse full file client-side
+      const XLSX = await import('xlsx');
+      const uint8 = new Uint8Array(await file.arrayBuffer());
+      const wb = XLSX.read(uint8, { type: 'array', cellDates: false });
+      const isChamadas = file.name.toLowerCase().includes('chamadas');
+      const sheetName = isChamadas
+        ? (wb.SheetNames.find((s: string) => s.includes('OneReport')) ?? wb.SheetNames[0])
+        : wb.SheetNames[0];
+      const sheet = wb.Sheets[sheetName];
+      const headerRow = isChamadas ? 3 : 0;
+      const allRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, {
+        raw: true, defval: null, range: headerRow,
+      });
+
+      const totalRows = allRows.length;
+      const totalChunks = Math.ceil(totalRows / CHUNK_SIZE);
+      let uploadId: string | null = null;
+      let cumulativeInserted = 0;
+      let cumulativeRejected = 0;
+
+      setProgress({ sent: 0, total: totalChunks, phase: 'uploading' });
+
+      for (let ci = 0; ci < totalChunks; ci++) {
+        const chunkRows = allRows.slice(ci * CHUNK_SIZE, (ci + 1) * CHUNK_SIZE);
+        const isLast = ci === totalChunks - 1;
+
+        const res = await fetch('/api/upload/chunk', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            filename: file.name,
+            fileType,
+            uploadId,
+            rows: chunkRows,
+            totalRows,
+            isLast,
+            cumulativeInserted,
+            cumulativeRejected,
+          }),
+        });
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+          throw new Error(err.error ?? `Chunk ${ci + 1} falhou`);
+        }
+
+        const data = await res.json();
+        uploadId = data.uploadId;
+        cumulativeInserted += data.inserted ?? 0;
+        cumulativeRejected += data.rejected ?? 0;
+        setProgress({ sent: ci + 1, total: totalChunks, phase: 'uploading' });
+      }
+
+      setResult({ status: 'success', rowsReceived: totalRows, rowsInserted: cumulativeInserted, rowsRejected: cumulativeRejected });
+      setHistoryKey(k => k + 1);
+      setFile(null);
+      setValidation(null);
+      setIsLargeFile(false);
+    } catch (e) {
+      setResult({ status: 'error', message: e instanceof Error ? e.message : String(e) });
+    } finally {
+      setProcessing(false);
+      setProgress(null);
+    }
+  };
+
+  const handleImport = isLargeFile ? handleChunkedImport : handleRegularImport;
+
   const reset = () => {
     setFile(null);
     setValidation(null);
     setResult(null);
     setManualType('');
+    setIsLargeFile(false);
+    setProgress(null);
   };
 
   return (
@@ -243,6 +372,22 @@ export default function DataManagementPage() {
                 </div>
               )}
 
+              {/* Progress bar (large file chunked upload) */}
+              {progress && (
+                <div className="space-y-1.5">
+                  <div className="flex justify-between text-xs text-gray-500">
+                    <span>{progress.phase === 'parsing' ? 'A carregar e analisar ficheiro...' : `Chunk ${progress.sent} / ${progress.total}`}</span>
+                    <span>{progress.phase === 'uploading' ? `${Math.round((progress.sent / progress.total) * 100)}%` : ''}</span>
+                  </div>
+                  <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+                    <div
+                      className="h-2 bg-[#00B4A0] rounded-full transition-all duration-300"
+                      style={{ width: progress.phase === 'parsing' ? '5%' : `${Math.round((progress.sent / progress.total) * 100)}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
               {/* Status + action */}
               <div className="flex items-center justify-between pt-2">
                 <div className="flex items-center gap-2">
@@ -253,7 +398,7 @@ export default function DataManagementPage() {
                   )}
                 </div>
                 <div className="flex gap-3">
-                  <button onClick={reset} className="px-4 py-2 text-sm text-gray-500 hover:text-gray-700">
+                  <button onClick={reset} disabled={processing} className="px-4 py-2 text-sm text-gray-500 hover:text-gray-700 disabled:opacity-40">
                     Cancelar
                   </button>
                   {validation.ready && (
@@ -262,7 +407,9 @@ export default function DataManagementPage() {
                       disabled={processing}
                       className="px-5 py-2 text-sm font-medium text-white bg-[#00305E] rounded-lg hover:bg-[#004080] disabled:opacity-50 transition"
                     >
-                      {processing ? 'A importar...' : 'Importar'}
+                      {processing
+                        ? (progress?.phase === 'parsing' ? 'A analisar...' : `Chunk ${progress?.sent ?? 0}/${progress?.total ?? '?'}...`)
+                        : 'Importar'}
                     </button>
                   )}
                 </div>
