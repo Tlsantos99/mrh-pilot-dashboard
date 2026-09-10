@@ -29,9 +29,11 @@ export default function LeadTimeSection({ filters = {}, gdCountBase, peritagemCo
 
   useEffect(() => {
     setLoading(true);
+    // LT API must never receive status filter — it always shows closed cases only
+    const ltQS = buildQS({ ...filters, status: undefined });
     const qs = buildQS(filters);
     Promise.all([
-      fetch(`/api/metrics/lead-times${qs}`).then(r => r.json()),
+      fetch(`/api/metrics/lead-times${ltQS}`).then(r => r.json()),
       fetch(`/api/metrics/adoption${qs}`).then(r => r.json()),
     ])
       .then(([lt, adop]) => {

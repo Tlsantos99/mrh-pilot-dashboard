@@ -24,7 +24,9 @@ function isoWeekOf(dateStr: string): { year: number; week: number; label: string
 
 export async function GET(req: NextRequest) {
   try {
-    const filters = readFilters(new URL(req.url).searchParams);
+    const rawFilters = readFilters(new URL(req.url).searchParams);
+    // LT always shows closed cases — ignore status filter (closing_date IS NOT NULL already enforces it)
+    const filters = { ...rawFilters, status: undefined };
     const supabase = createServerClient();
 
     const SEL = 'channel,has_expertise,lt_total,lt_opening_acceptance,closing_date';
