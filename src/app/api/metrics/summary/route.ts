@@ -14,6 +14,8 @@ export async function GET(req: NextRequest) {
     const filters = readFilters(new URL(req.url).searchParams);
     const supabase = createServerClient();
     const baseFilters = { ...filters, expertise: undefined };
+    // LT is always computed from closed cases — ignore status filter
+    const ltFilters = { ...filters, status: undefined };
     const PAGE = 1000;
 
     const SEL = 'channel,has_expertise,lt_total,lt_opening_acceptance,closing_date,acceptance_date';
@@ -29,11 +31,20 @@ export async function GET(req: NextRequest) {
         .eq('eligible_for_pilot', true)
         .eq('branch', 'Riscos Múltiplos-Habitação');
 
-    const [p1, p2, b1, b2, refresh] = await Promise.all([
+    // LT query: always filters to closed cases, never uses status param
+    const makeLtQ = () =>
+      supabase.from('occurrences').select(SEL)
+        .eq('eligible_for_pilot', true)
+        .eq('branch', 'Riscos Múltiplos-Habitação')
+        .not('closing_date', 'is', null);
+
+    const [p1, p2, b1, b2, lt1, lt2, refresh] = await Promise.all([
       applyFilters(makeQ(), filters).range(0, PAGE - 1),
       applyFilters(makeQ(), filters).range(PAGE, PAGE * 2 - 1),
       applyFilters(makeQBase(), baseFilters).range(0, PAGE - 1),
       applyFilters(makeQBase(), baseFilters).range(PAGE, PAGE * 2 - 1),
+      applyFilters(makeLtQ(), ltFilters).range(0, PAGE - 1),
+      applyFilters(makeLtQ(), ltFilters).range(PAGE, PAGE * 2 - 1),
       supabase.from('upload_history').select('file_type,upload_timestamp')
         .eq('status', 'success').order('upload_timestamp', { ascending: false }).limit(10),
     ]);
@@ -43,6 +54,8 @@ export async function GET(req: NextRequest) {
 
     const r = [...(p1.data ?? []), ...(p2.data ?? [])];
     const rBase = [...(b1.data ?? []), ...(b2.data ?? [])];
+    // rLT: always closed cases, ignores status filter — source of truth for all LT KPIs
+    const rLT = [...(lt1.data ?? []), ...(lt2.data ?? [])];
 
     const total_eligible = r.length;
     const total_novo = r.filter(x => x.channel === 'Formulário Novo').length;
@@ -56,8 +69,9 @@ export async function GET(req: NextRequest) {
     const gd_rate_novo = novo_rows.length > 0 ? Math.round((novo_rows.filter(x => !x.has_expertise).length / novo_rows.length) * 1000) / 10 : 0;
     const gd_rate_antigo = antigo_rows.length > 0 ? Math.round((antigo_rows.filter(x => !x.has_expertise).length / antigo_rows.length) * 1000) / 10 : 0;
 
-    const closed = r.filter(x => x.closing_date && x.lt_total != null) as { lt_total: number; has_expertise: boolean }[];
-    const with_acc = r.filter(x => x.acceptance_date && x.lt_opening_acceptance != null) as { lt_opening_acceptance: number }[];
+    // LT always computed from rLT (closed cases only, status filter stripped)
+    const closed = rLT.filter(x => x.closing_date && x.lt_total != null) as { lt_total: number; has_expertise: boolean }[];
+    const with_acc = rLT.filter(x => x.acceptance_date && x.lt_opening_acceptance != null) as { lt_opening_acceptance: number }[];
     const gd_rows = r.filter(x => !x.has_expertise);
     const peritagem_rows = r.filter(x => x.has_expertise);
     const closed_gd = closed.filter(x => !x.has_expertise);
@@ -80,8 +94,8 @@ export async function GET(req: NextRequest) {
       ? Math.round((closed_novo_base.filter(x => !x.has_expertise).length / closed_novo_base.length) * 1000) / 10 : 0;
     const gd_rate_antigo_closed = closed_antigo_base.length > 0
       ? Math.round((closed_antigo_base.filter(x => !x.has_expertise).length / closed_antigo_base.length) * 1000) / 10 : 0;
-    // LT abertura→aceitação for Formulário Novo specifically (closed cases)
-    const with_acc_novo = (rBase as { channel?: string; lt_opening_acceptance?: number | null }[])
+    // LT abertura→aceitação for Formulário Novo specifically (closed cases — from rLT)
+    const with_acc_novo = (rLT as { channel?: string; lt_opening_acceptance?: number | null }[])
       .filter(x => x.channel === 'Formulário Novo' && x.lt_opening_acceptance != null) as { lt_opening_acceptance: number }[];
 
     const kpis = {
