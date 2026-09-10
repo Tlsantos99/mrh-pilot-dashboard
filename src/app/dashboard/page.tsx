@@ -32,6 +32,7 @@ function DashboardContent() {
   const expertise = sp.get('expertise') ?? undefined;
   const status = sp.get('status') ?? undefined;
   const max_date = sp.get('max_date') ?? undefined;
+  const calls_max_date = sp.get('calls_max_date') ?? undefined;
   const filters: DashboardFilters = { wave, channel, expertise, status, max_date };
 
   const [kpis, setKpis] = useState<SummaryKPIs | null>(null);
@@ -43,6 +44,13 @@ function DashboardContent() {
     const p = new URLSearchParams(sp.toString());
     if (val) p.set('max_date', val);
     else p.delete('max_date');
+    router.push(`/dashboard${p.toString() ? `?${p.toString()}` : ''}`);
+  };
+
+  const setCallsMaxDate = (val: string) => {
+    const p = new URLSearchParams(sp.toString());
+    if (val) p.set('calls_max_date', val);
+    else p.delete('calls_max_date');
     router.push(`/dashboard${p.toString() ? `?${p.toString()}` : ''}`);
   };
 
@@ -143,10 +151,10 @@ function DashboardContent() {
           <p className="text-sm text-gray-500 mt-0.5">Danos por Água e Riscos Elétricos — Ageas Portugal</p>
         </div>
         <div className="flex items-center gap-6">
-          {/* Date limit filter */}
+          {/* Date limit filter — pilot */}
           <div className="flex items-center gap-2">
             <label htmlFor="max-date-filter" className="text-xs text-gray-500 whitespace-nowrap">
-              Data limite
+              Corte piloto
             </label>
             <input
               id="max-date-filter"
@@ -160,6 +168,28 @@ function DashboardContent() {
                 onClick={() => setMaxDate('')}
                 className="text-xs text-gray-400 hover:text-gray-600 transition"
                 title="Remover filtro de data"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+          {/* Date limit filter — calls */}
+          <div className="flex items-center gap-2">
+            <label htmlFor="calls-max-date-filter" className="text-xs text-gray-500 whitespace-nowrap">
+              Corte chamadas
+            </label>
+            <input
+              id="calls-max-date-filter"
+              type="date"
+              value={calls_max_date ?? ''}
+              onChange={e => setCallsMaxDate(e.target.value)}
+              className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-[#00B4A0]/20 focus:border-[#00B4A0]"
+            />
+            {calls_max_date && (
+              <button
+                onClick={() => setCallsMaxDate('')}
+                className="text-xs text-gray-400 hover:text-gray-600 transition"
+                title="Remover filtro de chamadas"
               >
                 ✕
               </button>
@@ -250,7 +280,7 @@ function DashboardContent() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div id="chamadas" className="card p-6 scroll-mt-4">
           <SectionHeader title="5. Linha de Apoio" subtitle="Chamadas recebidas" />
-          <CallCenterSection maxDate={max_date} />
+          <CallCenterSection maxDate={calls_max_date} />
         </div>
         <div id="fila" className="card p-6 scroll-mt-4">
           <SectionHeader title="6. Fila de Espera do Robot" subtitle="Ocorrências sem aceitação" />
