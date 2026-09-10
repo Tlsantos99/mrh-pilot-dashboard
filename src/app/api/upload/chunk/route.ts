@@ -86,6 +86,7 @@ export async function POST(req: NextRequest) {
       antigo: 'staging_formulario_antigo',
       agentes: 'staging_agentes',
       chamadas: 'staging_chamadas',
+      chamadas_summary: 'calls_daily_agg',
     };
 
     for (let i = 0; i < processedRows.length; i += BATCH_SIZE) {
