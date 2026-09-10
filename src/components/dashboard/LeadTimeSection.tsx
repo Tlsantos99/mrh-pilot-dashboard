@@ -9,7 +9,7 @@ import { Chart } from 'react-chartjs-2';
 import LoadingState from '@/components/ui/LoadingState';
 import EmptyState from '@/components/ui/EmptyState';
 import { buildQS } from '@/lib/utils/filters';
-import type { LeadTimeWeekly, AdoptionWeekly, DashboardFilters } from '@/types';
+import type { LeadTimeWeekly, DashboardFilters } from '@/types';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, BarController, LineElement, LineController, PointElement, Tooltip, Legend);
 
@@ -24,21 +24,16 @@ interface Props {
 
 export default function LeadTimeSection({ filters = {}, gdCountBase, peritagemCountBase, closedGdCountBase, closedPeritagemCountBase }: Props) {
   const [ltData, setLtData] = useState<LeadTimeWeekly[]>([]);
-  const [adoptionData, setAdoptionData] = useState<AdoptionWeekly[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     setLoading(true);
     // LT API must never receive status filter — it always shows closed cases only
     const ltQS = buildQS({ ...filters, status: undefined });
-    const qs = buildQS(filters);
-    Promise.all([
-      fetch(`/api/metrics/lead-times${ltQS}`).then(r => r.json()),
-      fetch(`/api/metrics/adoption${qs}`).then(r => r.json()),
-    ])
-      .then(([lt, adop]) => {
+    fetch(`/api/metrics/lead-times${ltQS}`)
+      .then(r => r.json())
+      .then(lt => {
         setLtData(lt.data ?? []);
-        setAdoptionData(adop.data ?? []);
         setLoading(false);
       })
       .catch(() => setLoading(false));
@@ -47,19 +42,12 @@ export default function LeadTimeSection({ filters = {}, gdCountBase, peritagemCo
   if (loading) return <LoadingState />;
   if (!ltData.length) return <EmptyState title="Sem dados de lead time" message="Disponível após o encerramento das ocorrências." />;
 
-  // Merge weeks from adoption (for bars) and lead-times (for lines)
-  const allWeekLabels = Array.from(new Set([
-    ...adoptionData.map(d => d.week_label),
-    ...ltData.map(d => d.week_label),
-  ])).sort((a, b) => {
-    const aRow = adoptionData.find(d => d.week_label === a) ?? ltData.find(d => d.week_label === a);
-    const bRow = adoptionData.find(d => d.week_label === b) ?? ltData.find(d => d.week_label === b);
-    const aW = (aRow as { year?: number; week?: number })?.year ?? 0;
-    const bW = (bRow as { year?: number; week?: number })?.year ?? 0;
-    if (aW !== bW) return aW - bW;
-    const aWk = (aRow as { week?: number })?.week ?? 0;
-    const bWk = (bRow as { week?: number })?.week ?? 0;
-    return aWk - bWk;
+  // All week labels come from ltData (closed cases grouped by closing week)
+  const allWeekLabels = Array.from(new Set(ltData.map(d => d.week_label))).sort((a, b) => {
+    const aRow = ltData.find(d => d.week_label === a);
+    const bRow = ltData.find(d => d.week_label === b);
+    if ((aRow?.year ?? 0) !== (bRow?.year ?? 0)) return (aRow?.year ?? 0) - (bRow?.year ?? 0);
+    return (aRow?.week ?? 0) - (bRow?.week ?? 0);
   });
 
   const isGdFilter = filters.expertise === 'false';
@@ -68,9 +56,15 @@ export default function LeadTimeSection({ filters = {}, gdCountBase, peritagemCo
   // Label prefix depends on active expertise filter
   const ltPrefix = isGdFilter ? 'LT GD' : isPeritagemFilter ? 'LT Per.' : 'LT';
 
-  // Bar data (weekly occurrence counts from adoption API)
-  const novoBar = allWeekLabels.map(w => adoptionData.find(d => d.week_label === w)?.novo ?? null);
-  const antigoBar = allWeekLabels.map(w => adoptionData.find(d => d.week_label === w)?.antigo ?? null);
+  // Bar data: closed cases per week per channel (from ltData — grouped by closing week)
+  const novoBar = allWeekLabels.map(w => {
+    const rows = ltData.filter(d => d.week_label === w && d.channel === 'Formulário Novo');
+    return rows.length ? rows.reduce((s, r) => s + (r.total ?? 0), 0) : null;
+  });
+  const antigoBar = allWeekLabels.map(w => {
+    const rows = ltData.filter(d => d.week_label === w && d.channel === 'Formulário Antigo');
+    return rows.length ? rows.reduce((s, r) => s + (r.total ?? 0), 0) : null;
+  });
 
   // Line data — aggregate by channel (novo/antigo) across whatever expertise filter is active.
   // The API already filters by expertise, so ltData only contains the relevant rows.
@@ -172,7 +166,7 @@ export default function LeadTimeSection({ filters = {}, gdCountBase, peritagemCo
         position: 'right' as const,
         beginAtZero: true,
         grid: { drawOnChartArea: false },
-        title: { display: true, text: 'Ocorrências', font: { size: 10 } },
+        title: { display: true, text: 'Enc. (ocorr.)', font: { size: 10 } },
         ticks: { font: { size: 9 }, stepSize: 5 },
       },
     },
@@ -199,7 +193,7 @@ export default function LeadTimeSection({ filters = {}, gdCountBase, peritagemCo
       {/* Chart */}
       <div>
         <p className="text-xs text-gray-400 mb-2">
-          Linhas = LT médio (dias úteis, eixo esq.) · Barras = n.º ocorrências abertas (eixo dir.)
+          Linhas = LT médio (dias úteis, eixo esq.) · Barras = n.º ocorrências encerradas (eixo dir.)
         </p>
         <Chart type="bar" data={chartData} options={options} height={90} />
       </div>
