@@ -128,7 +128,7 @@ export async function POST(req: NextRequest) {
         const batch = aggRows.slice(i, i + BATCH_SIZE);
         const { data: upserted, error } = await supabase
           .from('calls_daily_agg')
-          .upsert(batch, { onConflict: 'call_date,source_upload_id', ignoreDuplicates: true })
+          .upsert(batch, { onConflict: 'call_date', ignoreDuplicates: false })
           .select('id');
         if (error) rejected += batch.length;
         else inserted += upserted?.length ?? batch.length;
