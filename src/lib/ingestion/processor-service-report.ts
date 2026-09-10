@@ -1,7 +1,27 @@
 import { getISOWeek } from '@/lib/utils/business-days';
 import { parseHHMMSStoMinutes } from '@/lib/utils/dates';
 
+// Each row arrives as { "0": val, "1": val, ... } (raw column indices as string keys).
+// The process route reads the sheet with header:1 (array mode) starting from data row 5.
+//
+// Column mapping (0-indexed) for date rows in "Relatório de perfomance de serv":
+//  0 → date (DD/MM/YYYY) — identifies the daily total row
+//  5 → Total de Interações Oferecidas
+//  7 → Interações tratadas (handled/answered)
+//  8 → Total de Interações Abandonadas
+//  12 → Interações Rejeitadas
+//  15 → Tempo médio de tratamento (HH:MM:SS)
+//  17 → Atraso médio de resposta (HH:MM:SS)
+//  19 → Tempo médio de conversação (HH:MM:SS)
+//  21 → Nível de Serviço 1 %
+//  22 → Nível de Serviço 2 %
+//  24 → Nível de Serviço 3 %
+
 type RawRow = Record<string, unknown>;
+
+function col(row: RawRow, idx: number): unknown {
+  return row[String(idx)] ?? null;
+}
 
 function numOrNull(v: unknown): number | null {
   if (v === null || v === undefined || v === '') return null;
@@ -17,19 +37,6 @@ function parseDDMMYYYY(v: unknown): Date | null {
   return new Date(parseInt(match[3]), parseInt(match[2]) - 1, parseInt(match[1]));
 }
 
-// Sheet 2 "Relatório de perfomance de serv" has a mixed structure:
-// - Date rows: Col A (index 0) has DD/MM/YYYY
-// - Service rows: same totals but Col C (index 2) has service name
-// - Time interval rows: Col E (index 4) has HH:MM:SS
-// We only want date rows (Col A is a date string).
-//
-// Column mapping (1-indexed from summary):
-// Col 1 → date, Col 6 → total_offered, Col 7 → queued,
-// Col 8 → handled, Col 9 → abandoned, Col 10 → abandoned_queue,
-// Col 11 → abandoned_ivr, Col 13 → rejected,
-// Col 16 → avg_handle (HH:MM:SS), Col 18 → avg_wait (HH:MM:SS),
-// Col 20 → avg_conversation (HH:MM:SS), Col 22 → sl1, Col 23 → sl2, Col 25 → sl3
-
 export function processServiceReportRows(
   rawData: RawRow[],
   uploadId: string,
@@ -37,42 +44,29 @@ export function processServiceReportRows(
   const results: Record<string, unknown>[] = [];
 
   for (const row of rawData) {
-    const colValues = Object.values(row);
-    // Col 0 (A) must be a date string DD/MM/YYYY
-    const col0 = colValues[0];
-    if (!col0) continue;
-    const dateStr = String(col0).trim();
-    const callDate = parseDDMMYYYY(dateStr);
-    if (!callDate) continue; // skip service rows, interval rows, totals, etc.
+    // Only process date rows: col 0 must be DD/MM/YYYY
+    const callDate = parseDDMMYYYY(col(row, 0));
+    if (!callDate) continue;
 
     const callDateISO = callDate.toISOString().substring(0, 10);
     const isoWeek = getISOWeek(callDate);
 
-    // Col indices (0-based): 5=total_offered, 7=handled, 8=abandoned, 12=rejected
-    // 15=avg_handle, 17=avg_wait, 19=avg_conversation, 21=sl1, 22=sl2, 24=sl3
-    const totalOffered = numOrNull(colValues[5]);
-    const handled = numOrNull(colValues[7]);
-    const abandoned = numOrNull(colValues[8]);
-    const rejected = numOrNull(colValues[12]);
-    const avgHandleRaw = colValues[15] ? String(colValues[15]).trim() : null;
-    const avgWaitRaw = colValues[17] ? String(colValues[17]).trim() : null;
-    const avgConvRaw = colValues[19] ? String(colValues[19]).trim() : null;
-    const sl1 = numOrNull(colValues[21]);
-    const sl2 = numOrNull(colValues[22]);
-    const sl3 = numOrNull(colValues[24]);
+    const avgHandleRaw = col(row, 15);
+    const avgWaitRaw = col(row, 17);
+    const avgConvRaw = col(row, 19);
 
     results.push({
       call_date: callDateISO,
-      total_offered: totalOffered,
-      handled: handled,
-      abandoned: abandoned,
-      rejected: rejected,
-      avg_handle_minutes: parseHHMMSStoMinutes(avgHandleRaw),
-      avg_wait_minutes: parseHHMMSStoMinutes(avgWaitRaw),
-      avg_conversation_minutes: parseHHMMSStoMinutes(avgConvRaw),
-      service_level_1: sl1,
-      service_level_2: sl2,
-      service_level_3: sl3,
+      total_offered: numOrNull(col(row, 5)),
+      handled: numOrNull(col(row, 7)),
+      abandoned: numOrNull(col(row, 8)),
+      rejected: numOrNull(col(row, 12)),
+      avg_handle_minutes: parseHHMMSStoMinutes(avgHandleRaw ? String(avgHandleRaw).trim() : null),
+      avg_wait_minutes: parseHHMMSStoMinutes(avgWaitRaw ? String(avgWaitRaw).trim() : null),
+      avg_conversation_minutes: parseHHMMSStoMinutes(avgConvRaw ? String(avgConvRaw).trim() : null),
+      service_level_1: numOrNull(col(row, 21)),
+      service_level_2: numOrNull(col(row, 22)),
+      service_level_3: numOrNull(col(row, 24)),
       call_year: isoWeek?.year ?? null,
       call_week: isoWeek?.week ?? null,
       call_week_label: isoWeek?.label ?? null,

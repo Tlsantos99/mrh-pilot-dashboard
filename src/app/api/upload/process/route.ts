@@ -66,13 +66,20 @@ export async function POST(req: NextRequest) {
     let headerRow = 0;
     const isChamadas = file.name.toLowerCase().includes('chamadas');
     if (isChamadas) headerRow = 3; // row 4 = index 3
-    if (isServiceReport) headerRow = 4; // row 5 = index 4 (headers), data starts at row 6
 
-    const rawData = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, {
-      raw: true,
-      defval: null,
-      range: headerRow,
-    });
+    // Service report: parse as raw arrays (header:1) to preserve column positions
+    // Sheet 2 rows 0-4 are metadata/headers; data starts at row index 5
+    let rawData: Record<string, unknown>[];
+    if (isServiceReport) {
+      const allArrays = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, raw: true, defval: null }) as unknown[][];
+      rawData = allArrays.slice(5).map(row => Object.fromEntries((row as unknown[]).map((v, i) => [String(i), v])));
+    } else {
+      rawData = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, {
+        raw: true,
+        defval: null,
+        range: headerRow,
+      });
+    }
 
     const headers = rawData.length > 0 ? Object.keys(rawData[0]) : [];
 
