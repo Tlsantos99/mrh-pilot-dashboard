@@ -204,7 +204,7 @@ function DashboardContent() {
 
       {/* KPI Row */}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
-        <KPICard label="Total elegíveis" value={fmt(kpis?.total_eligible)} color="navy"
+        <KPICard label="Total ocorrências" value={fmt(kpis?.total_eligible)} color="navy"
           tooltip="Ocorrências do ramo Riscos Múltiplos-Habitação abertas por AGEs do piloto, excluindo eventos. São elegíveis as participações que cumprem os critérios de inclusão no piloto do Formulário Novo." />
         <KPICard label="Formulário Novo" value={fmt(kpis?.total_novo)} color="teal" />
         <KPICard label="Formulário Antigo" value={fmt(kpis?.total_antigo)} color="pink" />

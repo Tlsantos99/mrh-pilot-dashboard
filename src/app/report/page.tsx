@@ -43,6 +43,7 @@ interface ReportData {
   kpis: KPIs; agents: AgentRow[]; calls: CallTotals | null;
   weekly: WeeklyCall[]; ltData: LtRow[];
   maxDate: string; callsMaxDate: string; generatedAt: string;
+  adoptionBefore: number | null; adoptionBeforeDate: string;
 }
 
 function fmt(n: number | null | undefined, suffix = '') {
@@ -74,24 +75,31 @@ export default function ReportPage() {
     setLoading(true);
     setError(null);
     try {
+      const beforeDate = new Date(maxDate + 'T12:00:00');
+      beforeDate.setDate(beforeDate.getDate() - 6);
+      const beforeDateStr = beforeDate.toISOString().slice(0, 10);
       const qs = `?max_date=${maxDate}`;
       const callsQS = `?calls_max_date=${callsMaxDate}`;
-      const [sumRes, agRes, callRes, ltRes] = await Promise.all([
+      const [sumRes, agRes, callRes, ltRes, sumBeforeRes] = await Promise.all([
         fetch(`/api/metrics/summary${qs}`),
         fetch(`/api/metrics/agents${qs}`),
         fetch(`/api/metrics/calls${callsQS}`),
         fetch(`/api/metrics/lead-times${qs}`),
+        fetch(`/api/metrics/summary?max_date=${beforeDateStr}`),
       ]);
       const { kpis } = await sumRes.json();
       const { data: agents } = await agRes.json();
       const { totals: calls, weekly } = await callRes.json();
       const { data: ltData } = await ltRes.json();
+      const { kpis: kpisBefore } = await sumBeforeRes.json();
       if (!kpis) throw new Error('Sem dados — verifique os filtros.');
       setData({
         kpis, agents: agents ?? [], calls: calls ?? null,
         weekly: weekly ?? [], ltData: ltData ?? [],
         maxDate, callsMaxDate,
         generatedAt: new Date().toLocaleString('pt-PT'),
+        adoptionBefore: kpisBefore?.adoption_rate ?? null,
+        adoptionBeforeDate: beforeDateStr,
       });
     } catch (e) {
       setError(String(e));
@@ -336,19 +344,19 @@ export default function ReportPage() {
                   <div className="hl-card hl-teal">
                     <div className="hl-card-header">
                       <div className="hl-card-label">Taxa de Adoção</div>
-                      <div className="hl-card-value">{adoption7d !== null ? `${adoption7d}%` : '—'}</div>
-                      <div className="hl-card-sub">últimos 7 dias · Form. Novo / (Novo + Antigo)</div>
+                      <div className="hl-card-value">{fmt(rd.kpis.adoption_rate, '%')}</div>
+                      <div className="hl-card-sub">
+                        {rd.adoptionBefore !== null ? `${rd.adoptionBefore}%` : '—'}
+                        {' (até '}{fmtShort(startD)}{') → '}
+                        {fmt(rd.kpis.adoption_rate, '%')}
+                        {' (até '}{fmtShort(refD)}{')'}
+                      </div>
                     </div>
                     <div className="hl-card-bullets">
                       <div className="hl-bullet">
                         <span className="hl-bullet-icon">+</span>
                         <span className="hl-bullet-key">AGEs com 1.ª abertura de Form. Novo esta semana</span>
                         <span className="hl-bullet-val hl-teal-txt">{firstTimers.length} AGE{firstTimers.length !== 1 ? 's' : ''}</span>
-                      </div>
-                      <div className="hl-bullet">
-                        <span className="hl-bullet-icon">◎</span>
-                        <span className="hl-bullet-key">Taxa adoção global acumulada (até {fmtDate(rd.maxDate)})</span>
-                        <span className="hl-bullet-val">{fmt(rd.kpis.adoption_rate, '%')}</span>
                       </div>
                       <div className="hl-bullet">
                         <span className="hl-bullet-icon">⚠</span>
@@ -368,11 +376,6 @@ export default function ReportPage() {
                     </div>
                     <div className="hl-card-bullets">
                       <div className="hl-bullet">
-                        <span className="hl-bullet-icon">◎</span>
-                        <span className="hl-bullet-key">%GD todos os casos vs. encerrados</span>
-                        <span className="hl-bullet-val">{fmt(rd.kpis.gd_rate_global, '%')} → {fmt(rd.kpis.gd_rate_closed, '%')}</span>
-                      </div>
-                      <div className="hl-bullet">
                         <span className="hl-bullet-icon">●</span>
                         <span className="hl-bullet-key">%GD Form. Novo (encerrados)</span>
                         <span className="hl-bullet-val hl-teal-txt">{fmt(rd.kpis.gd_rate_novo_closed, '%')}</span>
@@ -391,16 +394,12 @@ export default function ReportPage() {
                     <div className="hl-card-header">
                       <div className="hl-card-label">Lead Time Piloto</div>
                       <div className="hl-card-value">{fmt(rd.kpis.avg_lt_total, ' dias')}</div>
-                      <div className="hl-card-sub">
-                        casos encerrados (dias úteis)&nbsp;·&nbsp;
-                        Ref. 2025: {LT_REF_2025} d&nbsp;
-                        {ltDelta !== null && <span className={ltDelta > 0 ? 'hl-warn-txt' : 'hl-teal-txt'}>({ltDelta > 0 ? '+' : ''}{ltDelta} d)</span>}
-                      </div>
+                      <div className="hl-card-sub">Baseline {LT_REF_2025} d</div>
                     </div>
                     <div className="hl-card-bullets">
                       <div className="hl-bullet">
                         <span className="hl-bullet-icon">●</span>
-                        <span className="hl-bullet-key">LT Form. Novo (enc.) vs. Form. Antigo (enc.)</span>
+                        <span className="hl-bullet-key">LT Form. Novo vs. Form. Antigo</span>
                         <span className="hl-bullet-val">
                           <span className="hl-teal-txt">{fmt(ltNovo, ' d')}</span>
                           {' vs. '}
@@ -409,7 +408,7 @@ export default function ReportPage() {
                       </div>
                       <div className="hl-bullet">
                         <span className="hl-bullet-icon">◎</span>
-                        <span className="hl-bullet-key">LT Abertura → Aceitação (Form. Novo, enc.)</span>
+                        <span className="hl-bullet-key">LT Abertura → Aceitação (Form. Novo)</span>
                         <span className="hl-bullet-val hl-teal-txt">{fmt(ltOANovo, ' dias')}</span>
                       </div>
                     </div>
@@ -425,7 +424,7 @@ export default function ReportPage() {
           <div className="report-page">
             <div className="section-title">Resumo Global do Piloto</div>
             <div className="kpi-grid-4">
-              <div className="kpi-box navy"><div className="kpi-label">Total Elegíveis</div><div className="kpi-value">{data.kpis.total_eligible}</div></div>
+              <div className="kpi-box navy"><div className="kpi-label">Total Ocorrências</div><div className="kpi-value">{data.kpis.total_eligible}</div></div>
               <div className="kpi-box teal"><div className="kpi-label">Formulário Novo</div><div className="kpi-value">{data.kpis.total_novo}</div></div>
               <div className="kpi-box pink"><div className="kpi-label">Formulário Antigo</div><div className="kpi-value">{data.kpis.total_antigo}</div></div>
               <div className="kpi-box gray"><div className="kpi-label">Email / Outro</div><div className="kpi-value">{data.kpis.total_email}</div></div>
