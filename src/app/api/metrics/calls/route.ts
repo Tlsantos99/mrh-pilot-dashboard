@@ -17,12 +17,18 @@ export async function GET(req: NextRequest) {
     const callsMaxDate = new URL(req.url).searchParams.get('calls_max_date');
     const supabase = createServerClient();
 
-    let rawQ = supabase.from('calls').select('answered, abandoned, within_business_hours, call_duration_minutes');
+    // Raw individual calls
+    let rawQ = supabase.from('calls').select('answered, abandoned, within_business_hours, call_duration_minutes, call_year, call_week');
     if (callsMaxDate) rawQ = rawQ.lte('call_date', callsMaxDate);
 
-    const [{ data: weekly }, { data: totals }] = await Promise.all([
+    // Daily aggregates
+    let aggQ = supabase.from('calls_daily_agg').select('total_offered, handled, abandoned, avg_conversation_minutes, call_year, call_week');
+    if (callsMaxDate) aggQ = aggQ.lte('call_date', callsMaxDate);
+
+    const [{ data: weekly }, { data: rawTotals }, { data: aggData }] = await Promise.all([
       supabase.from('v_call_center_weekly').select('*').order('year').order('week'),
       rawQ,
+      aggQ,
     ]);
 
     // Filter weekly by date if needed
@@ -34,14 +40,42 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const total = totals?.length ?? 0;
-    const answered = totals?.filter(r => r.answered).length ?? 0;
-    const withinHoursTotal = totals?.filter(r => r.within_business_hours).length ?? 0;
-    const answeredWithin = totals?.filter(r => r.answered && r.within_business_hours).length ?? 0;
-    const outsideHours = totals?.filter(r => !r.within_business_hours).length ?? 0;
-    const avgDuration = totals && totals.length > 0
-      ? totals.filter(r => r.answered && r.call_duration_minutes).reduce((s, r) => s + (r.call_duration_minutes ?? 0), 0) /
-        (totals.filter(r => r.answered && r.call_duration_minutes).length || 1)
+    // Determine which year/week combinations are covered by raw calls
+    const rawWeekKeys = new Set(
+      (rawTotals ?? [])
+        .filter(r => r.call_year != null && r.call_week != null)
+        .map(r => `${r.call_year}-${r.call_week}`)
+    );
+
+    // Agg rows for weeks NOT covered by raw calls
+    const filteredAgg = (aggData ?? []).filter(r =>
+      r.call_year != null && r.call_week != null &&
+      !rawWeekKeys.has(`${r.call_year}-${r.call_week}`)
+    );
+
+    // Raw totals
+    const rawTotal = rawTotals?.length ?? 0;
+    const rawAnswered = rawTotals?.filter(r => r.answered).length ?? 0;
+    const rawWithin = rawTotals?.filter(r => r.within_business_hours).length ?? 0;
+    const rawAnsweredWithin = rawTotals?.filter(r => r.answered && r.within_business_hours).length ?? 0;
+    const rawOutside = rawTotals?.filter(r => !r.within_business_hours).length ?? 0;
+    const rawAnsweredDuration = rawTotals?.filter(r => r.answered && r.call_duration_minutes) ?? [];
+    const rawDurationSum = rawAnsweredDuration.reduce((s, r) => s + (r.call_duration_minutes ?? 0), 0);
+
+    // Agg totals (all agg calls treated as within business hours)
+    const aggTotal = filteredAgg.reduce((s, r) => s + (r.total_offered ?? 0), 0);
+    const aggAnswered = filteredAgg.reduce((s, r) => s + (r.handled ?? 0), 0);
+    const aggAbandoned = filteredAgg.reduce((s, r) => s + (r.abandoned ?? 0), 0);
+    const aggDurationSum = filteredAgg.reduce((s, r) => s + (r.avg_conversation_minutes ?? 0) * (r.handled ?? 0), 0);
+
+    const total = rawTotal + aggTotal;
+    const answered = rawAnswered + aggAnswered;
+    const withinHoursTotal = rawWithin + aggTotal; // agg calls are all within hours
+    const answeredWithin = rawAnsweredWithin + aggAnswered;
+    const outsideHours = rawOutside; // agg doesn't track outside-hours separately
+    const totalAnsweredForDuration = rawAnsweredDuration.length + aggAnswered;
+    const avgDuration = totalAnsweredForDuration > 0
+      ? (rawDurationSum + aggDurationSum) / totalAnsweredForDuration
       : 0;
 
     return NextResponse.json({

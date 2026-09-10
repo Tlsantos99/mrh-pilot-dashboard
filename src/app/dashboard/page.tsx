@@ -250,7 +250,7 @@ function DashboardContent() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div id="chamadas" className="card p-6 scroll-mt-4">
           <SectionHeader title="5. Linha de Apoio" subtitle="Chamadas recebidas" />
-          <CallCenterSection />
+          <CallCenterSection maxDate={max_date} />
         </div>
         <div id="fila" className="card p-6 scroll-mt-4">
           <SectionHeader title="6. Fila de Espera do Robot" subtitle="Ocorrências sem aceitação" />

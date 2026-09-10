@@ -9,6 +9,7 @@ import { processPilotoRow } from '@/lib/ingestion/processor-piloto';
 import { processAntigoRow } from '@/lib/ingestion/processor-antigo';
 import { processAgentesRow, buildAgentRecord } from '@/lib/ingestion/processor-agentes';
 import { processChamadasRow } from '@/lib/ingestion/processor-chamadas';
+import { processServiceReportRows } from '@/lib/ingestion/processor-service-report';
 import { transformOccurrences, syncAgentsFromStaging } from '@/lib/transform/occurrences';
 import type { FileType } from '@/types';
 
@@ -48,10 +49,15 @@ export async function POST(req: NextRequest) {
     // Detect first to know if we need special header row
     const firstSheetName = workbook.SheetNames[0];
     let sheetName = firstSheetName;
+    const isServiceReport = /^Service Performance Report/i.test(file.name);
 
     // For chamadas file, use specific sheet
     if (file.name.toLowerCase().includes('chamadas')) {
       sheetName = workbook.SheetNames.find(s => s.includes('OneReport') || s.includes('Simplificado')) ?? firstSheetName;
+    }
+    // For service report, use sheet 2 (index 1)
+    if (isServiceReport) {
+      sheetName = workbook.SheetNames[1] ?? firstSheetName;
     }
 
     const sheet = workbook.Sheets[sheetName];
@@ -60,6 +66,7 @@ export async function POST(req: NextRequest) {
     let headerRow = 0;
     const isChamadas = file.name.toLowerCase().includes('chamadas');
     if (isChamadas) headerRow = 3; // row 4 = index 3
+    if (isServiceReport) headerRow = 4; // row 5 = index 4 (headers), data starts at row 6
 
     const rawData = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, {
       raw: true,
@@ -107,6 +114,36 @@ export async function POST(req: NextRequest) {
     let inserted = 0;
     let rejected = 0;
 
+    // For chamadas_summary: process all rows at once (special logic)
+    if (fileType === 'chamadas_summary') {
+      const aggRows = processServiceReportRows(rawData, uploadId);
+      for (let i = 0; i < aggRows.length; i += BATCH_SIZE) {
+        const batch = aggRows.slice(i, i + BATCH_SIZE);
+        const { data: upserted, error } = await supabase
+          .from('calls_daily_agg')
+          .upsert(batch, { onConflict: 'call_date,source_upload_id', ignoreDuplicates: true })
+          .select('id');
+        if (error) rejected += batch.length;
+        else inserted += upserted?.length ?? batch.length;
+      }
+
+      await supabase.from('upload_history').update({
+        rows_inserted: inserted,
+        rows_rejected: rejected,
+        rows_updated: 0,
+        status: rejected === rawData.length ? 'error' : inserted === 0 ? 'duplicate' : 'success',
+      }).eq('id', uploadId);
+
+      return NextResponse.json({
+        status: 'success',
+        uploadId,
+        fileType,
+        rowsReceived: rawData.length,
+        rowsInserted: inserted,
+        rowsRejected: rejected,
+      });
+    }
+
     // Process rows in batches
     const processedRows: Record<string, unknown>[] = [];
     for (let i = 0; i < rawData.length; i++) {
@@ -128,14 +165,14 @@ export async function POST(req: NextRequest) {
     }
 
     // Get staging table name
-    const tableMap: Record<FileType, string> = {
+    const tableMap: Record<Exclude<FileType, 'chamadas_summary'>, string> = {
       global: 'staging_global',
       piloto: 'staging_piloto_agentes',
       antigo: 'staging_formulario_antigo',
       agentes: 'staging_agentes',
       chamadas: 'staging_chamadas',
     };
-    const tableName = tableMap[fileType];
+    const tableName = tableMap[fileType as Exclude<FileType, 'chamadas_summary'>];
 
     // Insert in batches (upsert by row_hash)
     for (let i = 0; i < processedRows.length; i += BATCH_SIZE) {

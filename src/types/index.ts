@@ -1,4 +1,4 @@
-export type FileType = 'global' | 'piloto' | 'antigo' | 'agentes' | 'chamadas';
+export type FileType = 'global' | 'piloto' | 'antigo' | 'agentes' | 'chamadas' | 'chamadas_summary';
 export type UploadStatus = 'processing' | 'success' | 'partial' | 'error' | 'duplicate';
 
 export interface UploadHistory {

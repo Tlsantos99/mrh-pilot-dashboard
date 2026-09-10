@@ -43,13 +43,15 @@ export async function POST(req: NextRequest) {
     // Parse Excel — lazy: only read headers + row count, avoid parsing all cells
     const workbook = XLSX.read(buffer, { type: 'buffer', cellDates: false });
     const isChamadas = file.name.toLowerCase().includes('chamadas');
+    const isServiceReport = /^Service Performance Report/i.test(file.name);
     const firstSheetName = workbook.SheetNames[0];
-    const sheetName = isChamadas
+    let sheetName = isChamadas
       ? (workbook.SheetNames.find(s => s.includes('OneReport')) ?? firstSheetName)
       : firstSheetName;
+    if (isServiceReport) sheetName = workbook.SheetNames[1] ?? firstSheetName;
 
     const sheet = workbook.Sheets[sheetName];
-    const headerRow = isChamadas ? 3 : 0;
+    const headerRow = isChamadas ? 3 : isServiceReport ? 4 : 0;
 
     if (!sheet || !sheet['!ref']) {
       return NextResponse.json({
@@ -92,10 +94,11 @@ export async function POST(req: NextRequest) {
       antigo: 'staging_formulario_antigo',
       agentes: 'staging_agentes',
       chamadas: 'staging_chamadas',
+      chamadas_summary: 'calls_daily_agg',
     };
 
     let estimatedDuplicates = 0;
-    if (totalRows > 0) {
+    if (totalRows > 0 && fileType !== 'chamadas_summary') {
       // Parse first 200 data rows only for dedup estimate (fast)
       const sampleRange = {
         s: { r: headerRow, c: sheetRange.s.c },

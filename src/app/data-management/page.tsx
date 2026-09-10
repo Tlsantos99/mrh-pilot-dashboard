@@ -13,6 +13,7 @@ function quickDetectType(filename: string): FileType | null {
   if (/^Participaç/i.test(f)) return 'antigo';
   if (/^Agentes_Piloto/i.test(f)) return 'agentes';
   if (/^Chamadas/i.test(f)) return 'chamadas';
+  if (/^Service Performance Report/i.test(f)) return 'chamadas_summary';
   return null;
 }
 
@@ -48,6 +49,7 @@ const FILE_TYPE_LABELS: Record<FileType, string> = {
   antigo: 'Participações Formulário Antigo',
   agentes: 'Agentes e Waves',
   chamadas: 'Chamadas Linha Agentes',
+  chamadas_summary: 'Service Performance Report',
 };
 
 function RetransformButton() {

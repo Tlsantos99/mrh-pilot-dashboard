@@ -24,13 +24,14 @@ interface CallTotals {
   outsideHours: number; avgDurationMinutes: number;
 }
 
-export default function CallCenterSection() {
+export default function CallCenterSection({ maxDate }: { maxDate?: string }) {
   const [weekly, setWeekly] = useState<WeeklyRow[]>([]);
   const [totals, setTotals] = useState<CallTotals | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch('/api/metrics/calls')
+    const qs = maxDate ? `?calls_max_date=${encodeURIComponent(maxDate)}` : '';
+    fetch(`/api/metrics/calls${qs}`)
       .then(r => r.json())
       .then(({ totals: t, weekly: w }) => {
         setTotals(t ?? null);
@@ -38,7 +39,7 @@ export default function CallCenterSection() {
         setLoading(false);
       })
       .catch(() => setLoading(false));
-  }, []);
+  }, [maxDate]);
 
   if (loading) return <LoadingState />;
   if (!totals || totals.total === 0) return <EmptyState title="Sem dados de chamadas" />;

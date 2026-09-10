@@ -12,9 +12,11 @@ const REQUIRED_COLUMNS: Record<FileType, string[]> = {
   antigo: ['Nº Sinistro SR', 'Id_SR'],
   agentes: ['Código Agente', 'Wave', 'ASF Agregador'],
   chamadas: ['Session ID', 'Atendida', 'Abandonada', 'Duração da Chamada'],
+  chamadas_summary: [],
 };
 
 const FILENAME_PATTERNS: Array<{ pattern: RegExp; type: FileType }> = [
+  { pattern: /^Service Performance Report/i, type: 'chamadas_summary' },
   { pattern: /^Report_/i, type: 'piloto' },
   { pattern: /^Agregador_Piloto/i, type: 'piloto' },
   { pattern: /^FicheiroGlobal/i, type: 'global' },
