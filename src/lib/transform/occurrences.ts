@@ -54,21 +54,49 @@ export async function transformOccurrences(uploadId?: string) {
   }
 
   // 4. Aggregate staging_global by occurrence_id — paginate to avoid PostgREST row limit
-  const PAGE_SIZE = 10000;
+  // PostgREST caps responses at 1000 rows regardless of range size, so use PAGE_SIZE=1000
+  // and stop only when a page is empty (not when it's smaller than requested).
+  const PAGE_SIZE = 1000;
+
+  // When uploadId is provided, scope to only the occurrence_ids in that upload
+  // (then read ALL staging_global rows for those occurrence_ids, across all uploads).
+  // This makes incremental retransforms fast without missing cross-upload data.
+  let scopedOccurrenceIds: string[] | null = null;
+  if (uploadId) {
+    const oidPages: string[] = [];
+    let oidFrom = 0;
+    while (true) {
+      const { data: oidPage } = await supabase
+        .from('staging_global')
+        .select('occurrence_id')
+        .eq('upload_id', uploadId)
+        .range(oidFrom, oidFrom + PAGE_SIZE - 1);
+      if (!oidPage || oidPage.length === 0) break;
+      for (const r of oidPage) if (r.occurrence_id) oidPages.push(r.occurrence_id);
+      if (oidPage.length < PAGE_SIZE) break;
+      oidFrom += PAGE_SIZE;
+    }
+    scopedOccurrenceIds = [...new Set(oidPages)];
+  }
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const globalRows: any[] = [];
   let from = 0;
   while (true) {
-    const { data: page, error: pageErr } = await supabase
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let query: any = supabase
       .from('staging_global')
       .select('*')
       .order('occurrence_id')
       .order('process_number')
       .range(from, from + PAGE_SIZE - 1);
+    if (scopedOccurrenceIds) {
+      query = query.in('occurrence_id', scopedOccurrenceIds);
+    }
+    const { data: page, error: pageErr } = await query;
     if (pageErr) throw new Error(`staging_global page error: ${pageErr.message}`);
     if (!page || page.length === 0) break;
     globalRows.push(...page);
-    if (page.length < PAGE_SIZE) break;
     from += PAGE_SIZE;
   }
 
