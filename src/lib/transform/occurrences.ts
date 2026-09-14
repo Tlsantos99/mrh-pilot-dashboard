@@ -87,10 +87,14 @@ export async function transformOccurrences(uploadId?: string) {
 
   for (const [occurrenceId, rows] of Object.entries(grouped)) {
     // Find main process: RIGHT(TRIM(process_number), 3) = '000'
-    const mainProcess = rows.find(r => {
-      const p = r.process_number?.trim() ?? '';
-      return p.slice(-3) === '000';
-    }) ?? rows[0];
+    // When multiple rows exist for the same process (different uploads), prefer
+    // the row with closing_date_accounting set (most recent state wins).
+    const mainCandidates = rows.filter(r => (r.process_number?.trim() ?? '').slice(-3) === '000');
+    const mainProcess = (
+      mainCandidates.find(r => r.closing_date_accounting) ??
+      mainCandidates[mainCandidates.length - 1] ??
+      rows[0]
+    );
 
     // Peritagem: any row has service_number OR expertise_costs > 0
     const hasExpertise = rows.some(r =>
