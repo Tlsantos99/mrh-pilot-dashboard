@@ -76,7 +76,7 @@ export async function transformOccurrences(uploadId?: string) {
       if (oidPage.length < PAGE_SIZE) break;
       oidFrom += PAGE_SIZE;
     }
-    scopedOccurrenceIds = [...new Set(oidPages)];
+    scopedOccurrenceIds = Array.from(new Set(oidPages));
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
