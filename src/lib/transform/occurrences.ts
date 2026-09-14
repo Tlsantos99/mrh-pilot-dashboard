@@ -114,8 +114,16 @@ export async function transformOccurrences(uploadId?: string) {
     const agent = agentCode ? agentMap[agentCode] : null;
 
     // Dates from main process /000
-    const openingDate = mainProcess.opening_date ? new Date(mainProcess.opening_date) : null;
-    const acceptanceDate = mainProcess.acceptance_date ? new Date(mainProcess.acceptance_date) : null;
+    // New GlobalPTR exports for closed cases sometimes omit opening_date — fall back to
+    // any other candidate row (old upload) that has the date.
+    const openingDateSrc = mainProcess.opening_date
+      ? mainProcess
+      : (mainCandidates.find(r => r.opening_date) ?? rows.find(r => r.opening_date) ?? mainProcess);
+    const acceptanceDateSrc = mainProcess.acceptance_date
+      ? mainProcess
+      : (mainCandidates.find(r => r.acceptance_date) ?? rows.find(r => r.acceptance_date) ?? mainProcess);
+    const openingDate = openingDateSrc.opening_date ? new Date(openingDateSrc.opening_date) : null;
+    const acceptanceDate = acceptanceDateSrc.acceptance_date ? new Date(acceptanceDateSrc.acceptance_date) : null;
     const closingDate = mainProcess.closing_date_accounting ? new Date(mainProcess.closing_date_accounting) : null;
     const participationDate = mainProcess.participation_date ? new Date(mainProcess.participation_date) : null;
 
