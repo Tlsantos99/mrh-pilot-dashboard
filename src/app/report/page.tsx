@@ -370,15 +370,15 @@ export default function ReportPage() {
                   {/* CARD 2 — GD */}
                   <div className="hl-card hl-navy">
                     <div className="hl-card-header">
-                      <div className="hl-card-label">% Gestão Direta</div>
-                      <div className="hl-card-value">{fmt(rd.kpis.gd_rate_global, '%')}</div>
-                      <div className="hl-card-sub">todos os casos elegíveis (abertos e encerrados)</div>
+                      <div className="hl-card-label">% Gestão Direta — Form. Novo</div>
+                      <div className="hl-card-value">{fmt(rd.kpis.gd_rate_novo_closed, '%')}</div>
+                      <div className="hl-card-sub">casos Form. Novo encerrados</div>
                     </div>
                     <div className="hl-card-bullets">
                       <div className="hl-bullet">
                         <span className="hl-bullet-icon">●</span>
-                        <span className="hl-bullet-key">%GD Form. Novo (encerrados)</span>
-                        <span className="hl-bullet-val hl-teal-txt">{fmt(rd.kpis.gd_rate_novo_closed, '%')}</span>
+                        <span className="hl-bullet-key">%GD encerrados (todos os canais)</span>
+                        <span className="hl-bullet-val hl-navy-txt">{fmt(rd.kpis.gd_rate_closed, '%')}</span>
                       </div>
                       <div className="hl-bullet">
                         <span className="hl-bullet-icon">●</span>
@@ -392,19 +392,15 @@ export default function ReportPage() {
                   {/* CARD 3 — LT */}
                   <div className="hl-card hl-orange">
                     <div className="hl-card-header">
-                      <div className="hl-card-label">Lead Time Piloto</div>
-                      <div className="hl-card-value">{fmt(rd.kpis.avg_lt_total, ' dias')}</div>
-                      <div className="hl-card-sub">Baseline {LT_REF_2025} d</div>
+                      <div className="hl-card-label">Lead Time — Form. Novo</div>
+                      <div className="hl-card-value">{fmt(ltNovo, ' dias')}</div>
+                      <div className="hl-card-sub">Baseline {LT_REF_2025} d · casos encerrados</div>
                     </div>
                     <div className="hl-card-bullets">
                       <div className="hl-bullet">
                         <span className="hl-bullet-icon">●</span>
-                        <span className="hl-bullet-key">LT Form. Novo vs. Form. Antigo</span>
-                        <span className="hl-bullet-val">
-                          <span className="hl-teal-txt">{fmt(ltNovo, ' d')}</span>
-                          {' vs. '}
-                          <span className="hl-pink-txt">{fmt(ltAntigo, ' d')}</span>
-                        </span>
+                        <span className="hl-bullet-key">LT Form. Antigo (encerrados)</span>
+                        <span className="hl-bullet-val hl-pink-txt">{fmt(ltAntigo, ' d')}</span>
                       </div>
                       <div className="hl-bullet">
                         <span className="hl-bullet-icon">◎</span>
@@ -429,14 +425,16 @@ export default function ReportPage() {
               <div className="kpi-box pink"><div className="kpi-label">Formulário Antigo</div><div className="kpi-value">{data.kpis.total_antigo}</div></div>
               <div className="kpi-box gray"><div className="kpi-label">Email / Outro</div><div className="kpi-value">{data.kpis.total_email}</div></div>
             </div>
-            <div className="adoption-highlight">
-              <div className="adoption-big">{fmt(data.kpis.adoption_rate, '%')}</div>
-              <div className="adoption-label">Taxa de Adoção Global<br /><span style={{fontWeight:'normal',fontSize:'0.75rem'}}>Formulário Novo / (Novo + Antigo)</span></div>
+            <div className="adoption-highlight adoption-highlight-centered">
+              <div style={{textAlign:'center'}}>
+                <div className="adoption-big">{fmt(data.kpis.adoption_rate, '%')}</div>
+                <div className="adoption-label">Taxa de Adoção Global<br /><span style={{fontWeight:'normal',fontSize:'0.75rem'}}>Formulário Novo / (Novo + Antigo)</span></div>
+              </div>
             </div>
             <div className="kpi-grid-4" style={{marginTop:'1rem'}}>
-              <div className="kpi-box navy"><div className="kpi-label">% GD Global</div><div className="kpi-value">{fmt(data.kpis.gd_rate_global, '%')}</div></div>
-              <div className="kpi-box teal"><div className="kpi-label">% GD Novo Form.</div><div className="kpi-value">{fmt(data.kpis.gd_rate_novo, '%')}</div></div>
-              <div className="kpi-box pink"><div className="kpi-label">% GD Antigo Form.</div><div className="kpi-value">{fmt(data.kpis.gd_rate_antigo, '%')}</div></div>
+              <div className="kpi-box navy"><div className="kpi-label">% GD Global (Encerrados)</div><div className="kpi-value">{fmt(data.kpis.gd_rate_closed, '%')}</div></div>
+              <div className="kpi-box teal"><div className="kpi-label">% GD Form. Novo (Encerrados)</div><div className="kpi-value">{fmt(data.kpis.gd_rate_novo_closed, '%')}</div></div>
+              <div className="kpi-box pink"><div className="kpi-label">% GD Form. Antigo (Encerrados)</div><div className="kpi-value">{fmt(data.kpis.gd_rate_antigo_closed, '%')}</div></div>
               <div className="kpi-box orange"><div className="kpi-label">LT Médio GD</div><div className="kpi-value">{fmt(data.kpis.avg_lt_gd, ' d')}</div></div>
             </div>
             <div className="section-subtitle" style={{marginTop:'1.5rem'}}>Resumo por Wave</div>
@@ -528,29 +526,76 @@ export default function ReportPage() {
             </div>
           ))}
 
-          {/* LEAD TIMES — KPI resumo */}
-          <div className="report-page">
-            <div className="section-title">Lead Times — Casos Encerrados</div>
-            <div className="kpi-grid-4">
-              <div className="kpi-box navy"><div className="kpi-label">LT Global</div><div className="kpi-value">{fmt(data.kpis.avg_lt_total, ' d')}</div></div>
-              <div className="kpi-box teal"><div className="kpi-label">LT Gestão Direta</div><div className="kpi-value">{fmt(data.kpis.avg_lt_gd, ' d')}</div></div>
-              <div className="kpi-box pink"><div className="kpi-label">LT Peritagem</div><div className="kpi-value">{fmt(data.kpis.avg_lt_expertise, ' d')}</div></div>
-              <div className="kpi-box orange"><div className="kpi-label">LT Abertura→Aceit.</div><div className="kpi-value">{fmt(data.kpis.avg_lt_opening_acceptance, ' d')}</div></div>
-            </div>
-            <div className="kpi-grid-4" style={{marginTop:'0.75rem'}}>
-              <div className="kpi-box teal"><div className="kpi-label">Ocorrências GD</div><div className="kpi-value">{fmt(data.kpis.total_gd_base)}</div><div className="kpi-sub">{fmt(data.kpis.closed_gd_count_base)} encerradas</div></div>
-              <div className="kpi-box orange"><div className="kpi-label">Ocorrências Peritagem</div><div className="kpi-value">{fmt(data.kpis.total_peritagem_base)}</div><div className="kpi-sub">{fmt(data.kpis.closed_peritagem_count_base)} encerradas</div></div>
-              <div className="kpi-box gray" style={{gridColumn:'span 2'}}>
-                <div className="kpi-label" style={{textAlign:'left'}}>Potencial GD</div>
-                <div style={{fontSize:'0.85rem',color:'#374151',marginTop:'0.25rem'}}>
-                  {data.kpis.gd_rate_novo && data.kpis.gd_rate_antigo && data.kpis.gd_rate_antigo > 0
-                    ? `Novo Form. tem ${(data.kpis.gd_rate_novo / data.kpis.gd_rate_antigo).toFixed(1)}x mais potencial GD (${fmt(data.kpis.gd_rate_novo, '%')} vs ${fmt(data.kpis.gd_rate_antigo, '%')})`
-                    : '—'}
+          {/* LEAD TIMES — KPI resumo: comparação Novo vs Antigo */}
+          {(() => {
+            function ltByCh(ld: LtRow[], ch: string, exp?: string) {
+              const rows = ld.filter(r => r.channel === ch && r.avg_lt_total != null && (!exp || r.expertise_type === exp));
+              const tot = rows.reduce((s, r) => s + r.total, 0);
+              return tot > 0 ? Math.round(rows.reduce((s, r) => s + (r.avg_lt_total ?? 0) * r.total, 0) / tot * 10) / 10 : null;
+            }
+            function ltOAByCh(ld: LtRow[], ch: string) {
+              const rows = ld.filter(r => r.channel === ch && r.avg_lt_opening_acceptance != null);
+              const tot = rows.reduce((s, r) => s + r.total, 0);
+              return tot > 0 ? Math.round(rows.reduce((s, r) => s + (r.avg_lt_opening_acceptance ?? 0) * r.total, 0) / tot * 10) / 10 : null;
+            }
+            function closedByCh(ld: LtRow[], ch: string, exp?: string) {
+              return ld.filter(r => r.channel === ch && (!exp || r.expertise_type === exp)).reduce((s, r) => s + r.total, 0);
+            }
+            const ld = data.ltData;
+            const ltN = ltByCh(ld, 'Formulário Novo');
+            const ltA = ltByCh(ld, 'Formulário Antigo');
+            const ltNGD = ltByCh(ld, 'Formulário Novo', 'Gestão Direta');
+            const ltAGD = ltByCh(ld, 'Formulário Antigo', 'Gestão Direta');
+            const ltNPeri = ltByCh(ld, 'Formulário Novo', 'Peritagem');
+            const ltAPeri = ltByCh(ld, 'Formulário Antigo', 'Peritagem');
+            const ltOAN = ltOAByCh(ld, 'Formulário Novo');
+            const ltOAA = ltOAByCh(ld, 'Formulário Antigo');
+            const cNovo = closedByCh(ld, 'Formulário Novo');
+            const cAntigo = closedByCh(ld, 'Formulário Antigo');
+            return (
+              <div className="report-page">
+                <div className="section-title">Lead Times — Casos Encerrados</div>
+                <div className="section-subtitle">Comparação direta Form. Novo vs Form. Antigo · dias úteis · LT total = data participação → data fecho</div>
+
+                {/* Main LT comparison */}
+                <div className="lt-compare-grid" style={{marginTop:'1rem'}}>
+                  <div className="lt-compare-card lt-novo">
+                    <div className="lt-compare-label">Form. Novo · {cNovo} enc.</div>
+                    <div className="lt-compare-value">{fmt(ltN, ' d')}</div>
+                    <div className="lt-compare-sub">LT total</div>
+                    <div className="lt-compare-detail">
+                      <span>GD: <strong>{fmt(ltNGD, ' d')}</strong></span>
+                      <span>Peritagem: <strong>{fmt(ltNPeri, ' d')}</strong></span>
+                      <span>Abertura→Aceit.: <strong>{fmt(ltOAN, ' d')}</strong></span>
+                    </div>
+                  </div>
+                  <div className="lt-compare-vs">vs</div>
+                  <div className="lt-compare-card lt-antigo">
+                    <div className="lt-compare-label">Form. Antigo · {cAntigo} enc.</div>
+                    <div className="lt-compare-value">{fmt(ltA, ' d')}</div>
+                    <div className="lt-compare-sub">LT total</div>
+                    <div className="lt-compare-detail">
+                      <span>GD: <strong>{fmt(ltAGD, ' d')}</strong></span>
+                      <span>Peritagem: <strong>{fmt(ltAPeri, ' d')}</strong></span>
+                      <span>Abertura→Aceit.: <strong>{fmt(ltOAA, ' d')}</strong></span>
+                    </div>
+                  </div>
                 </div>
+
+                {/* Potencial GD */}
+                {data.kpis.gd_rate_novo_closed && data.kpis.gd_rate_antigo_closed && data.kpis.gd_rate_antigo_closed > 0 && (
+                  <div className="kpi-box gray" style={{marginTop:'0.75rem',textAlign:'left',padding:'0.75rem 1rem'}}>
+                    <span className="kpi-label">Potencial GD (encerrados): </span>
+                    <span style={{fontWeight:'600',color:'#00305E'}}>
+                      Novo Form. tem {(data.kpis.gd_rate_novo_closed / data.kpis.gd_rate_antigo_closed).toFixed(1)}x mais GD
+                      ({fmt(data.kpis.gd_rate_novo_closed, '%')} vs {fmt(data.kpis.gd_rate_antigo_closed, '%')})
+                    </span>
+                  </div>
+                )}
+                <p className="legend-row" style={{marginTop:'0.75rem'}}>Linhas = LT médio em dias úteis (eixo esq.) · Barras = ocorrências encerradas por semana (eixo dir.) · Nas páginas seguintes: detalhe por segmento</p>
               </div>
-            </div>
-            <p className="legend-row" style={{marginTop:'1rem'}}>Linhas = LT médio em dias úteis (eixo esq.) · Barras = ocorrências encerradas por semana (eixo dir.) · Nas páginas seguintes: detalhe por segmento</p>
-          </div>
+            );
+          })()}
 
           {/* LEAD TIMES — Todos os casos */}
           {data.ltData.length > 0 && (
@@ -639,8 +684,22 @@ export default function ReportPage() {
         .kpi-value { font-size: 1.5rem; font-weight: 700; color: #00305E; }
         .kpi-sub { font-size: 0.65rem; color: #9ca3af; margin-top: 0.2rem; }
         .adoption-highlight { display: flex; align-items: center; gap: 1.5rem; background: #f0fdfa; border-radius: 10px; padding: 1.25rem 1.5rem; margin-top: 1rem; }
+        .adoption-highlight-centered { justify-content: center; }
         .adoption-big { font-size: 3rem; font-weight: 800; color: #00B4A0; line-height: 1; }
         .adoption-label { font-size: 0.9rem; color: #374151; font-weight: 600; line-height: 1.4; }
+        .lt-compare-grid { display: grid; grid-template-columns: 1fr auto 1fr; gap: 1rem; align-items: center; }
+        .lt-compare-vs { font-size: 1.1rem; font-weight: 700; color: #9ca3af; text-align: center; }
+        .lt-compare-card { border-radius: 10px; padding: 1.25rem 1.5rem; }
+        .lt-compare-label { font-size: 0.7rem; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 0.5rem; opacity: 0.8; }
+        .lt-compare-value { font-size: 2.5rem; font-weight: 800; line-height: 1; margin-bottom: 0.15rem; }
+        .lt-compare-sub { font-size: 0.7rem; margin-bottom: 0.75rem; opacity: 0.75; }
+        .lt-compare-detail { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.75rem; }
+        .lt-compare-detail span { color: #6b7280; }
+        .lt-compare-detail strong { color: #111827; }
+        .lt-novo { background: #f0fdfa; color: #0d9488; }
+        .lt-novo .lt-compare-value { color: #00B4A0; }
+        .lt-antigo { background: #fdf2f8; color: #E8007D; }
+        .lt-antigo .lt-compare-value { color: #E8007D; }
         .report-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
         .report-table th { background: #f1f5f9; color: #374151; font-weight: 600; padding: 0.5rem 0.75rem; text-align: left; }
         .report-table th.num { text-align: right; }
