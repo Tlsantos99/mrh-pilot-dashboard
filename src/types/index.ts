@@ -167,5 +167,6 @@ export interface DashboardFilters {
   expertise?: string;
   status?: string;
   max_date?: string;
+  tipology?: string; // 'AGE' | 'PRIVATE'
 }
 

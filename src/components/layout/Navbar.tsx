@@ -1,6 +1,6 @@
 'use client';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 
 const navItems = [
   { href: '/dashboard', label: 'Dashboard' },
@@ -9,6 +9,14 @@ const navItems = [
 
 export default function Navbar() {
   const pathname = usePathname();
+  const router = useRouter();
+
+  if (pathname === '/login') return null;
+
+  const handleLogout = async () => {
+    await fetch('/api/auth/logout', { method: 'POST' });
+    router.push('/login');
+  };
 
   return (
     <nav className="bg-[#00305E] text-white shadow-md">
@@ -35,9 +43,17 @@ export default function Navbar() {
               ))}
             </div>
           </div>
-          <span className="text-xs text-blue-200">
-            {new Date().toLocaleDateString('pt-PT')}
-          </span>
+          <div className="flex items-center gap-4">
+            <span className="text-xs text-blue-200">
+              {new Date().toLocaleDateString('pt-PT')}
+            </span>
+            <button
+              onClick={handleLogout}
+              className="text-xs text-blue-200 hover:text-white transition-colors px-2 py-1 rounded hover:bg-white/10"
+            >
+              Sair
+            </button>
+          </div>
         </div>
       </div>
     </nav>

@@ -4,10 +4,14 @@ export type DashboardFilters = {
   expertise?: string;
   status?: string; // 'open' | 'closed' | ''
   max_date?: string; // YYYY-MM-DD — upper bound on opening_date (inclusive)
+  tipology?: string; // 'AGE' | 'PRIVATE' | ''
 };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function applyFilters(query: any, filters: DashboardFilters) {
+  // Tipology restricts to a wave range; individual wave filter further narrows
+  if (filters.tipology === 'AGE') query = query.in('wave_number', [1, 2, 3, 4]);
+  if (filters.tipology === 'PRIVATE') query = query.in('wave_number', [5, 6]);
   if (filters.wave) query = query.eq('wave_number', Number(filters.wave));
   if (filters.channel) query = query.eq('channel', filters.channel);
   if (filters.expertise === 'true') query = query.eq('has_expertise', true);
@@ -25,11 +29,13 @@ export function readFilters(searchParams: URLSearchParams): DashboardFilters {
     expertise: searchParams.get('expertise') ?? undefined,
     status: searchParams.get('status') ?? undefined,
     max_date: searchParams.get('max_date') ?? undefined,
+    tipology: searchParams.get('tipology') ?? undefined,
   };
 }
 
 export function buildQS(filters: DashboardFilters): string {
   const p = new URLSearchParams();
+  if (filters.tipology) p.set('tipology', filters.tipology);
   if (filters.wave) p.set('wave', filters.wave);
   if (filters.channel) p.set('channel', filters.channel);
   if (filters.expertise) p.set('expertise', filters.expertise);

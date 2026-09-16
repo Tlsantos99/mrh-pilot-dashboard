@@ -33,7 +33,8 @@ function DashboardContent() {
   const status = sp.get('status') ?? undefined;
   const max_date = sp.get('max_date') ?? undefined;
   const calls_max_date = sp.get('calls_max_date') ?? undefined;
-  const filters: DashboardFilters = { wave, channel, expertise, status, max_date };
+  const tipology = sp.get('tipology') ?? undefined;
+  const filters: DashboardFilters = { wave, channel, expertise, status, max_date, tipology };
 
   const [kpis, setKpis] = useState<SummaryKPIs | null>(null);
   const [lastUpdate, setLastUpdate] = useState<LastUpdate>({});
@@ -58,6 +59,7 @@ function DashboardContent() {
     setLoading(true);
     try {
       const p = new URLSearchParams();
+      if (tipology) p.set('tipology', tipology);
       if (wave) p.set('wave', wave);
       if (channel) p.set('channel', channel);
       if (expertise) p.set('expertise', expertise);
@@ -78,7 +80,7 @@ function DashboardContent() {
     } finally {
       setLoading(false);
     }
-  }, [wave, channel, expertise, status, max_date]);
+  }, [tipology, wave, channel, expertise, status, max_date]);
 
   useEffect(() => { loadSummary(); }, [loadSummary]);
 
@@ -148,7 +150,12 @@ function DashboardContent() {
       <div id="resumo" className="flex flex-wrap items-center justify-between gap-4 scroll-mt-4">
         <div>
           <h1 className="text-2xl font-bold text-[#00305E]">Dashboard Piloto MRH</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Danos por Água e Riscos Elétricos — Ageas Portugal</p>
+          <p className="text-sm text-gray-500 mt-0.5">
+            {tipology === 'PRIVATE'
+              ? 'Rede Private — Waves 5 & 6'
+              : tipology === 'AGE'
+                ? 'Rede AGE — Waves 1 a 4'
+                : 'Danos por Água e Riscos Elétricos — Ageas Portugal'}</p>
         </div>
         <div className="flex items-center gap-6">
           {/* Date limit filter — pilot */}
@@ -272,7 +279,10 @@ function DashboardContent() {
 
       {/* Section 4 — Por Mediadora */}
       <div id="agentes" className="card p-6 scroll-mt-4">
-        <SectionHeader title="4. Performance por AGE" subtitle="Agrupado por ASF Agregador e Wave" />
+        <SectionHeader
+          title={`4. Performance por ${tipology === 'PRIVATE' ? 'Mediadora Private' : 'AGE'}`}
+          subtitle="Agrupado por ASF Agregador e Wave"
+        />
         <AgentTable filters={filters} />
       </div>
 

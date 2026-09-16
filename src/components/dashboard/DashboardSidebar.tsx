@@ -13,12 +13,34 @@ const SECTIONS = [
   { id: 'qualidade', label: 'Qualidade' },
 ];
 
-const WAVES = [
+const TIPOLOGY = [
+  { value: '', label: 'Todas as Redes' },
+  { value: 'AGE', label: 'AGE (Waves 1–4)' },
+  { value: 'PRIVATE', label: 'Private (Waves 5–6)' },
+];
+
+const WAVES_ALL = [
   { value: '', label: 'Todas as Waves' },
   { value: '1', label: 'Wave 1' },
   { value: '2', label: 'Wave 2' },
   { value: '3', label: 'Wave 3' },
   { value: '4', label: 'Wave 4' },
+  { value: '5', label: 'Wave 5 – Private' },
+  { value: '6', label: 'Wave 6 – Private' },
+];
+
+const WAVES_AGE = [
+  { value: '', label: 'Todas as Waves' },
+  { value: '1', label: 'Wave 1' },
+  { value: '2', label: 'Wave 2' },
+  { value: '3', label: 'Wave 3' },
+  { value: '4', label: 'Wave 4' },
+];
+
+const WAVES_PRIVATE = [
+  { value: '', label: 'Todas as Waves' },
+  { value: '5', label: 'Wave 5' },
+  { value: '6', label: 'Wave 6' },
 ];
 
 const CHANNELS = [
@@ -45,16 +67,21 @@ export default function DashboardSidebar() {
   const pathname = usePathname();
   const sp = useSearchParams();
 
+  const tipology = sp.get('tipology') ?? '';
   const wave = sp.get('wave') ?? '';
   const channel = sp.get('channel') ?? '';
   const expertise = sp.get('expertise') ?? '';
   const status = sp.get('status') ?? '';
-  const hasFilters = wave || channel || expertise || status;
+  const hasFilters = tipology || wave || channel || expertise || status;
+
+  const waveOptions = tipology === 'AGE' ? WAVES_AGE : tipology === 'PRIVATE' ? WAVES_PRIVATE : WAVES_ALL;
 
   const update = useCallback((key: string, value: string) => {
     const p = new URLSearchParams(sp.toString());
     if (value) p.set(key, value);
     else p.delete(key);
+    // When switching tipology, clear the wave filter to avoid conflicts
+    if (key === 'tipology') p.delete('wave');
     router.push(`${pathname}?${p.toString()}`, { scroll: false });
   }, [sp, router, pathname]);
 
@@ -97,7 +124,29 @@ export default function DashboardSidebar() {
       <div className="p-4 space-y-4 flex-1">
         <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Filtros</p>
 
-        <FilterGroup label="Wave" options={WAVES} value={wave} onChange={v => update('wave', v)} />
+        {/* Rede toggle — prominent */}
+        <div>
+          <p className="text-[10px] font-medium text-gray-500 mb-1.5">Rede</p>
+          <div className="space-y-0.5">
+            {TIPOLOGY.map(o => (
+              <button
+                key={o.value}
+                onClick={() => update('tipology', o.value)}
+                className={`w-full text-left px-2.5 py-1.5 text-xs rounded transition-colors ${
+                  tipology === o.value
+                    ? o.value === 'PRIVATE'
+                      ? 'bg-[#00B4A0] text-white font-medium'
+                      : 'bg-[#00305E] text-white font-medium'
+                    : 'text-gray-600 hover:bg-gray-50'
+                }`}
+              >
+                {o.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <FilterGroup label="Wave" options={waveOptions} value={wave} onChange={v => update('wave', v)} />
         <FilterGroup label="Canal de Entrada" options={CHANNELS} value={channel} onChange={v => update('channel', v)} />
         <FilterGroup label="Peritagem" options={EXPERTISE} value={expertise} onChange={v => update('expertise', v)} />
         <FilterGroup label="Estado" options={STATUS} value={status} onChange={v => update('status', v)} />
