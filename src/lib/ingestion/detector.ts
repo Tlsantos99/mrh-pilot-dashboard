@@ -17,9 +17,11 @@ const REQUIRED_COLUMNS: Record<FileType, string[]> = {
 
 const FILENAME_PATTERNS: Array<{ pattern: RegExp; type: FileType }> = [
   { pattern: /^Service Performance Report/i, type: 'chamadas_summary' },
+  { pattern: /^ReportGlobal/i, type: 'global' },
   { pattern: /^Report_/i, type: 'piloto' },
   { pattern: /^Agregador_Piloto/i, type: 'piloto' },
   { pattern: /^FicheiroGlobal/i, type: 'global' },
+  { pattern: /Global.*PTR/i, type: 'global' },
   { pattern: /^Participações/i, type: 'antigo' },
   { pattern: /^Agentes_Piloto/i, type: 'agentes' },
   { pattern: /Cód Agentes/i, type: 'agentes' },

@@ -8,12 +8,14 @@ const CHUNK_SIZE = 1000; // rows per API call
 
 function quickDetectType(filename: string): FileType | null {
   const f = filename.replace(/.*[/\\]/, '');
+  if (/^Service Performance Report/i.test(f)) return 'chamadas_summary';
+  if (/^ReportGlobal/i.test(f)) return 'global';
   if (/^FicheiroGlobal/i.test(f)) return 'global';
+  if (/Global.*PTR/i.test(f)) return 'global';
   if (/^Report_|^Agregador_Piloto/i.test(f)) return 'piloto';
   if (/^Participaç/i.test(f)) return 'antigo';
   if (/^Agentes_Piloto/i.test(f)) return 'agentes';
   if (/^Chamadas/i.test(f)) return 'chamadas';
-  if (/^Service Performance Report/i.test(f)) return 'chamadas_summary';
   return null;
 }
 
