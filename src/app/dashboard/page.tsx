@@ -118,15 +118,25 @@ function DashboardContent() {
   }
 
   if (noData && !max_date) {
+    const isPrivateFilter = tipology === 'PRIVATE';
+    const isAgeFilter = tipology === 'AGE';
     return (
       <EmptyState
-        title="Sem dados disponíveis"
-        message="Importe os ficheiros na página Gestão de Dados para visualizar os indicadores do piloto."
+        title={isPrivateFilter ? 'Sem ocorrências elegíveis — Rede Private' : isAgeFilter ? 'Sem ocorrências elegíveis — Rede AGE' : 'Sem dados disponíveis'}
+        message={
+          isPrivateFilter
+            ? 'Os agentes da Rede Private entram no piloto a partir de 7 Set (wave 5) e 14 Set (wave 6). Ainda não existem ocorrências abertas após essas datas. Quando surgirem novos sinistros serão automaticamente visíveis aqui.'
+            : isAgeFilter
+              ? 'Não existem ocorrências elegíveis para a Rede AGE com os filtros actuais.'
+              : 'Importe os ficheiros na página Gestão de Dados para visualizar os indicadores do piloto.'
+        }
         action={
-          <a href="/data-management"
-            className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-[#00305E] rounded-lg hover:bg-[#004080] transition">
-            Ir para Gestão de Dados
-          </a>
+          isPrivateFilter ? undefined : (
+            <a href="/data-management"
+              className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-[#00305E] rounded-lg hover:bg-[#004080] transition">
+              Ir para Gestão de Dados
+            </a>
+          )
         }
       />
     );
