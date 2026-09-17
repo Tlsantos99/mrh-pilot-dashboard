@@ -57,7 +57,8 @@ export async function GET(req: NextRequest) {
       ].join(','));
     }
 
-    const csv = lines.join('\r\n');
+    // Prepend UTF-8 BOM so Excel opens accented characters correctly
+    const csv = '﻿' + lines.join('\r\n');
     const today = new Date().toISOString().substring(0, 10);
     const filename = `ocorrencias_piloto_${today}.csv`;
 
