@@ -25,7 +25,9 @@ export default function Navbar() {
         <div className="flex items-center justify-between h-14">
           <div className="flex items-center gap-6">
             <div className="flex items-center gap-3">
-              <Image src="/ageas-logo.png" alt="Ageas" width={72} height={28} className="object-contain" style={{ filter: 'brightness(0) invert(1)' }} />
+              <div className="bg-white rounded-md px-1.5 py-0.5">
+                <Image src="/ageas-logo.png" alt="Ageas" width={64} height={24} className="object-contain" />
+              </div>
               <span className="text-blue-300 text-lg font-light">|</span>
               <span className="font-bold text-base tracking-tight">
                 Piloto MRH
@@ -49,7 +51,9 @@ export default function Navbar() {
             </div>
           </div>
           <div className="flex items-center gap-4">
-            <Image src="/kaizen-logo.png" alt="Kaizen Institute" width={80} height={24} className="object-contain" style={{ filter: 'brightness(0) invert(1)', opacity: 0.85 }} />
+            <div className="bg-white rounded-md px-1.5 py-0.5">
+              <Image src="/kaizen-logo.png" alt="Kaizen Institute" width={72} height={22} className="object-contain" />
+            </div>
             <span className="text-xs text-blue-200">
               {new Date().toLocaleDateString('pt-PT')}
             </span>
