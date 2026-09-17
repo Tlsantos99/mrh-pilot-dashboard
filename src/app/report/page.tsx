@@ -10,7 +10,8 @@ ChartJS.register(CategoryScale, LinearScale, BarElement, BarController, LineElem
 
 interface KPIs {
   total_eligible: number; total_novo: number; total_antigo: number; total_email: number;
-  adoption_rate: number; gd_rate_global: number; gd_rate_novo: number; gd_rate_antigo: number;
+  adoption_rate: number; adoption_rate_last4w: number | null; last4w_label: string | null;
+  gd_rate_global: number; gd_rate_novo: number; gd_rate_antigo: number;
   gd_rate_closed: number; gd_rate_novo_closed: number; gd_rate_antigo_closed: number;
   total_gd_base: number; total_peritagem_base: number;
   closed_gd_count_base: number; closed_peritagem_count_base: number;
@@ -223,6 +224,15 @@ export default function ReportPage() {
 
   const fmtDate = (d: string) => new Date(d + 'T12:00:00').toLocaleDateString('pt-PT', { day: '2-digit', month: 'long', year: 'numeric' });
 
+  const logoBar = (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem', paddingBottom: '0.75rem', borderBottom: '1px solid #e5e7eb' }}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src="/ageas-logo.png" alt="Ageas" style={{ height: 28, objectFit: 'contain' }} />
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src="/kaizen-logo.png" alt="Kaizen Institute" style={{ height: 22, objectFit: 'contain' }} />
+    </div>
+  );
+
   return (
     <div className="min-h-screen bg-gray-100">
       {/* Controls — hidden on print */}
@@ -347,6 +357,7 @@ export default function ReportPage() {
             const fmtShort = (dt: Date) => dt.toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit' });
             return (
               <div className="report-page highlights-page">
+                {logoBar}
                 <div className="section-title">Destaques da Semana</div>
                 <div className="section-subtitle">Dados piloto até {fmtDate(rd.maxDate)} · Janela de referência: {fmtShort(startD)} – {fmtShort(refD)}</div>
                 <div className="highlights-grid">
@@ -355,8 +366,19 @@ export default function ReportPage() {
                   <div className="hl-card hl-teal">
                     <div className="hl-card-header">
                       <div className="hl-card-label">Taxa de Adoção</div>
-                      <div className="hl-card-value">{fmt(rd.kpis.adoption_rate, '%')}</div>
-                      <div className="hl-card-sub">
+                      <div style={{ display: 'flex', alignItems: 'flex-end', gap: '1.5rem', flexWrap: 'wrap' }}>
+                        <div>
+                          <div style={{ fontSize: '0.65rem', color: '#6b7280', marginBottom: 2 }}>Acumulado</div>
+                          <div className="hl-card-value" style={{ marginBottom: 0 }}>{fmt(rd.kpis.adoption_rate, '%')}</div>
+                        </div>
+                        {rd.kpis.adoption_rate_last4w != null && (
+                          <div style={{ borderLeft: '2px solid rgba(0,180,160,0.3)', paddingLeft: '1.25rem' }}>
+                            <div style={{ fontSize: '0.65rem', color: '#6b7280', marginBottom: 2 }}>Últimas 4 semanas {rd.kpis.last4w_label ?? ''}</div>
+                            <div style={{ fontSize: '2.5rem', fontWeight: 800, color: '#00B4A0', lineHeight: 1 }}>{rd.kpis.adoption_rate_last4w}%</div>
+                          </div>
+                        )}
+                      </div>
+                      <div className="hl-card-sub" style={{ marginTop: 6 }}>
                         {rd.adoptionBefore !== null ? `${rd.adoptionBefore}%` : '—'}
                         {' (até '}{fmtShort(startD)}{') → '}
                         {fmt(rd.kpis.adoption_rate, '%')}
@@ -429,6 +451,7 @@ export default function ReportPage() {
 
           {/* RESUMO GLOBAL */}
           <div className="report-page">
+            {logoBar}
             <div className="section-title">Resumo Global do Piloto</div>
             <div className="kpi-grid-4">
               <div className="kpi-box navy"><div className="kpi-label">Total Ocorrências</div><div className="kpi-value">{data.kpis.total_eligible}</div></div>
@@ -485,6 +508,7 @@ export default function ReportPage() {
           {/* POR WAVE */}
           {waveStats.map(ws => (
             <div key={ws.wave} className="report-page">
+              {logoBar}
               <div className="section-title">Adoção por Mediadora — {ws.waveName}</div>
               <div className="wave-header-row">
                 <div className="wave-stat"><span className="wave-stat-label">Mediadoras</span><span className="wave-stat-value">{ws.agents.length}</span></div>
@@ -565,6 +589,7 @@ export default function ReportPage() {
             const cAntigo = closedByCh(ld, 'Formulário Antigo');
             return (
               <div className="report-page">
+                {logoBar}
                 <div className="section-title">Lead Times — Casos Encerrados</div>
                 <div className="section-subtitle">Comparação direta Form. Novo vs Form. Antigo · dias úteis · LT total = data participação → data fecho</div>
 
@@ -611,6 +636,7 @@ export default function ReportPage() {
           {/* LEAD TIMES — Todos os casos */}
           {data.ltData.length > 0 && (
             <div className="report-page">
+              {logoBar}
               <div className="section-title">Lead Times — Todos os Casos</div>
               <div className="section-subtitle">LT agregado por canal de entrada (Form. Novo vs Form. Antigo), independentemente de GD ou Peritagem</div>
               <canvas id="lt-all" height={200} style={{marginTop:'1rem'}} />
@@ -620,6 +646,7 @@ export default function ReportPage() {
           {/* LEAD TIMES — Gestão Direta */}
           {data.ltData.length > 0 && (
             <div className="report-page">
+              {logoBar}
               <div className="section-title">Lead Times — Gestão Direta</div>
               <div className="section-subtitle">Apenas ocorrências sem peritagem · {fmt(data.kpis.closed_gd_count_base)} casos encerrados</div>
               <canvas id="lt-gd" height={200} style={{marginTop:'1rem'}} />
@@ -629,6 +656,7 @@ export default function ReportPage() {
           {/* LEAD TIMES — Peritagem */}
           {data.ltData.length > 0 && (
             <div className="report-page">
+              {logoBar}
               <div className="section-title">Lead Times — Peritagem</div>
               <div className="section-subtitle">Apenas ocorrências com peritagem · {fmt(data.kpis.closed_peritagem_count_base)} casos encerrados</div>
               <canvas id="lt-peri" height={200} style={{marginTop:'1rem'}} />
@@ -638,6 +666,7 @@ export default function ReportPage() {
           {/* LINHA DE APOIO */}
           {data.calls && data.calls.total > 0 && (
             <div className="report-page">
+              {logoBar}
               <div className="section-title">Linha de Apoio Agentes — Volume de Chamadas</div>
               <div className="section-subtitle">Dados até {fmtDate(data.callsMaxDate)} · Horário de funcionamento: 08h45 – 16h45</div>
               <div className="kpi-grid-3" style={{marginTop:'1rem'}}>
