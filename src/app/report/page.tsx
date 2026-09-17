@@ -284,6 +284,13 @@ export default function ReportPage() {
         <div className="report-container">
           {/* CAPA */}
           <div className="report-page cover-page">
+            <div className="cover-logo-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '2rem' }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/ageas-logo.png" alt="Ageas" style={{ height: 40, objectFit: 'contain', filter: 'brightness(0) invert(1)' }} />
+              <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: '1.5rem' }}>|</span>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/kaizen-logo.png" alt="Kaizen Institute" style={{ height: 32, objectFit: 'contain', filter: 'brightness(0) invert(1)', opacity: 0.85 }} />
+            </div>
             <div className="cover-logo">TOM HOUSEHOLD | PHASE 2</div>
             <div className="cover-title">STATUS PILOTO AGENTES<br />FORMULÁRIO NOVO</div>
             <div className="cover-meta">
