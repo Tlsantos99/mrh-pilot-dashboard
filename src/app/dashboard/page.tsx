@@ -12,6 +12,7 @@ import AgentTable from '@/components/dashboard/AgentTable';
 import CallCenterSection from '@/components/dashboard/CallCenterSection';
 import QueueSection from '@/components/dashboard/QueueSection';
 import DataQualitySection from '@/components/dashboard/DataQualitySection';
+import LeadTimeBreakdownSection from '@/components/dashboard/LeadTimeBreakdownSection';
 import type { SummaryKPIs, DashboardFilters } from '@/types';
 
 interface LastUpdate { [key: string]: string }
@@ -292,6 +293,13 @@ function DashboardContent() {
             <p className="text-5xl font-bold text-[#00B4A0]">{fmt(kpis?.adoption_rate, '%')}</p>
             <p className="text-xs text-gray-400 mt-1">Form. Novo / (Novo + Antigo)</p>
           </div>
+          {kpis?.adoption_rate_last4w != null && (
+            <div className="bg-teal-50 rounded-xl px-6 py-4 text-center border border-teal-200">
+              <p className="text-xs text-gray-500 mb-1">Adoção últimas 4 semanas</p>
+              <p className="text-5xl font-bold text-[#00B4A0]">{fmt(kpis.adoption_rate_last4w, '%')}</p>
+              <p className="text-xs text-gray-400 mt-1">{kpis.last4w_label ?? ''}</p>
+            </div>
+          )}
           <div className="flex gap-3 items-center">
             <div className="bg-blue-50 rounded-xl px-4 py-3 text-center">
               <p className="text-xs text-gray-500">Formulário Novo</p>
@@ -335,6 +343,12 @@ function DashboardContent() {
           closedGdCountBase={kpis?.closed_gd_count_base}
           closedPeritagemCountBase={kpis?.closed_peritagem_count_base}
         />
+      </div>
+
+      {/* Section 3.1 — Lead Time Breakdown */}
+      <div id="lt-breakdown" className="card p-6 scroll-mt-4">
+        <SectionHeader title="3.1. Abertura → Aceitação → Fecho" subtitle="Decomposição do lead time por fase — ocorrências encerradas" />
+        <LeadTimeBreakdownSection filters={filters} />
       </div>
 
       {/* Section 4 — Por Mediadora */}

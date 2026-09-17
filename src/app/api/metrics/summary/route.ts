@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
     const ltFilters = { ...filters, status: undefined };
     const PAGE = 1000;
 
-    const SEL = 'channel,has_expertise,lt_total,lt_opening_acceptance,closing_date,acceptance_date';
+    const SEL = 'channel,has_expertise,lt_total,lt_opening_acceptance,closing_date,acceptance_date,opening_year,opening_week';
     const SEL_BASE = 'channel,has_expertise,lt_total,lt_opening_acceptance,closing_date';
 
     const makeQ = () =>
@@ -98,9 +98,37 @@ export async function GET(req: NextRequest) {
     const with_acc_novo = (rLT as { channel?: string; lt_opening_acceptance?: number | null }[])
       .filter(x => x.channel === 'Formulário Novo' && x.lt_opening_acceptance != null) as { lt_opening_acceptance: number }[];
 
+    // Rolling 4-week adoption rate — last 4 ISO weeks with data
+    const allWeeks = r
+      .filter(x => x.opening_year && x.opening_week)
+      .map(x => ({ year: x.opening_year as number, week: x.opening_week as number }));
+    let adoption_rate_last4w: number | null = null;
+    let last4w_label: string | null = null;
+    if (allWeeks.length) {
+      const maxYear = Math.max(...allWeeks.map(w => w.year));
+      const maxWeek = Math.max(...allWeeks.filter(w => w.year === maxYear).map(w => w.week));
+      // Build last 4 ISO week slots (going backwards from maxYear/maxWeek)
+      const slots: Array<{ year: number; week: number }> = [];
+      let y = maxYear, w = maxWeek;
+      for (let i = 0; i < 4; i++) {
+        slots.push({ year: y, week: w });
+        w--;
+        if (w < 1) { y--; w = 52; } // approximate — ISO can have 53 but 52 is safe for rolling window
+      }
+      const last4 = r.filter(x =>
+        slots.some(s => s.year === (x.opening_year as number) && s.week === (x.opening_week as number))
+      );
+      const l4novo = last4.filter(x => x.channel === 'Formulário Novo').length;
+      const l4antigo = last4.filter(x => x.channel === 'Formulário Antigo').length;
+      const l4sum = l4novo + l4antigo;
+      adoption_rate_last4w = l4sum > 0 ? Math.round((l4novo / l4sum) * 1000) / 10 : 0;
+      const minSlot = slots[slots.length - 1];
+      last4w_label = `W${String(minSlot.week).padStart(2,'0')}–W${String(maxWeek).padStart(2,'0')}`;
+    }
+
     const kpis = {
       total_eligible, total_novo, total_antigo, total_email,
-      adoption_rate, gd_rate_global, gd_rate_novo, gd_rate_antigo,
+      adoption_rate, adoption_rate_last4w, last4w_label, gd_rate_global, gd_rate_novo, gd_rate_antigo,
       gd_rate_closed, gd_rate_novo_closed, gd_rate_antigo_closed,
       total_gd: gd_rows.length, total_peritagem: peritagem_rows.length,
       closed_gd_count: closed_gd.length, closed_peritagem_count: closed_peritagem.length,

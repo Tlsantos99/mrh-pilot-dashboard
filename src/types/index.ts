@@ -125,6 +125,8 @@ export interface SummaryKPIs {
   total_antigo: number;
   total_email: number;
   adoption_rate: number;
+  adoption_rate_last4w: number | null;
+  last4w_label: string | null;
   gd_rate_global: number;
   gd_rate_novo: number;
   gd_rate_antigo: number;
