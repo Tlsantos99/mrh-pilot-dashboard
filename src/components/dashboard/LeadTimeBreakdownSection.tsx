@@ -14,6 +14,10 @@ ChartJS.register(CategoryScale, LinearScale, BarElement, BarController, Tooltip,
 
 interface Props { filters?: DashboardFilters }
 
+function fmt1(v: number | null): string {
+  return v != null ? `${v.toFixed(1)} dias` : '—';
+}
+
 export default function LeadTimeBreakdownSection({ filters = {} }: Props) {
   const [ltData, setLtData] = useState<LeadTimeWeekly[]>([]);
   const [loading, setLoading] = useState(true);
@@ -37,8 +41,8 @@ export default function LeadTimeBreakdownSection({ filters = {} }: Props) {
     return (aRow?.week ?? 0) - (bRow?.week ?? 0);
   });
 
-  // Aggregate across channels and expertise types per week (weighted average)
-  function aggField(field: 'avg_lt_opening_acceptance' | 'avg_lt_acceptance_closing') {
+  // Weighted average per week across all channels/expertise
+  function aggField(field: 'avg_lt_opening_acceptance' | 'avg_lt_acceptance_closing' | 'avg_lt_total') {
     return allWeekLabels.map(wl => {
       const rows = ltData.filter(d => d.week_label === wl && d[field] != null);
       if (!rows.length) return null;
@@ -56,7 +60,7 @@ export default function LeadTimeBreakdownSection({ filters = {} }: Props) {
     datasets: [
       {
         type: 'bar' as const,
-        label: 'Abertura → Aceitação',
+        label: 'Fase Abertura',
         data: oaData,
         backgroundColor: '#00305E',
         borderRadius: 3,
@@ -64,7 +68,7 @@ export default function LeadTimeBreakdownSection({ filters = {} }: Props) {
       },
       {
         type: 'bar' as const,
-        label: 'Aceitação → Fecho',
+        label: 'Fase Aceitação',
         data: acData,
         backgroundColor: '#00B4A0',
         borderRadius: 3,
@@ -81,11 +85,11 @@ export default function LeadTimeBreakdownSection({ filters = {} }: Props) {
       tooltip: {
         callbacks: {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          label: (ctx: any) => ` ${ctx.dataset.label}: ${ctx.parsed.y ?? '—'} dias úteis`,
+          label: (ctx: any) => ` ${ctx.dataset.label}: ${ctx.parsed.y != null ? ctx.parsed.y.toFixed(1) : '—'} dias úteis`,
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           footer: (items: any[]) => {
             const total = items.reduce((s, i) => s + (i.parsed.y ?? 0), 0);
-            return `Total: ${Math.round(total * 10) / 10} dias úteis`;
+            return `Total: ${total.toFixed(1)} dias úteis`;
           },
         },
       },
@@ -101,33 +105,38 @@ export default function LeadTimeBreakdownSection({ filters = {} }: Props) {
     },
   };
 
-  // Summary KPIs
-  const avgOA = (() => {
-    const vals = oaData.filter((v): v is number => v != null);
+  // Summary KPIs — weighted avg across all weeks
+  function globalAvg(data: (number | null)[]): number | null {
+    const vals = data.filter((v): v is number => v != null);
     return vals.length ? Math.round(vals.reduce((a, b) => a + b, 0) / vals.length * 10) / 10 : null;
-  })();
-  const avgAC = (() => {
-    const vals = acData.filter((v): v is number => v != null);
-    return vals.length ? Math.round(vals.reduce((a, b) => a + b, 0) / vals.length * 10) / 10 : null;
-  })();
+  }
+
+  const avgOA = globalAvg(oaData);
+  const avgAC = globalAvg(acData);
+  const avgTotal = (avgOA != null && avgAC != null) ? Math.round((avgOA + avgAC) * 10) / 10 : null;
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-3 gap-3">
         <div className="bg-blue-50 border border-blue-100 rounded-lg p-3 text-center">
-          <p className="text-xs text-gray-500">LT médio Abertura→Aceitação</p>
-          <p className="text-2xl font-bold text-[#00305E]">{avgOA != null ? `${avgOA} dias` : '—'}</p>
-          <p className="text-[10px] text-gray-400 mt-0.5">tempo até o robot aceitar</p>
+          <p className="text-xs text-gray-500">LT médio Fase Abertura</p>
+          <p className="text-2xl font-bold text-[#00305E]">{fmt1(avgOA)}</p>
+          <p className="text-[10px] text-gray-400 mt-0.5">abertura → aceitação pelo robot</p>
         </div>
         <div className="bg-teal-50 border border-teal-100 rounded-lg p-3 text-center">
-          <p className="text-xs text-gray-500">LT médio Aceitação→Fecho</p>
-          <p className="text-2xl font-bold text-[#00B4A0]">{avgAC != null ? `${avgAC} dias` : '—'}</p>
-          <p className="text-[10px] text-gray-400 mt-0.5">tempo de resolução após aceitação</p>
+          <p className="text-xs text-gray-500">LT médio Fase Aceitação</p>
+          <p className="text-2xl font-bold text-[#00B4A0]">{fmt1(avgAC)}</p>
+          <p className="text-[10px] text-gray-400 mt-0.5">aceitação → resolução</p>
+        </div>
+        <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-center">
+          <p className="text-xs text-gray-500">LT médio Total</p>
+          <p className="text-2xl font-bold text-gray-700">{fmt1(avgTotal)}</p>
+          <p className="text-[10px] text-gray-400 mt-0.5">abertura → resolução (soma)</p>
         </div>
       </div>
       <div>
         <p className="text-xs text-gray-400 mb-2">
-          Barras empilhadas — ocorrências encerradas, média por semana de fecho
+          Barras empilhadas por semana — ocorrências encerradas, média ponderada por canal e tipo
         </p>
         <Chart type="bar" data={chartData} options={options} height={90} />
       </div>
