@@ -366,19 +366,8 @@ export default function ReportPage() {
                   <div className="hl-card hl-teal">
                     <div className="hl-card-header">
                       <div className="hl-card-label">Taxa de Adoção</div>
-                      <div style={{ display: 'flex', alignItems: 'flex-end', gap: '1.5rem', flexWrap: 'wrap' }}>
-                        <div>
-                          <div style={{ fontSize: '0.65rem', color: '#6b7280', marginBottom: 2 }}>Acumulado</div>
-                          <div className="hl-card-value" style={{ marginBottom: 0 }}>{fmt(rd.kpis.adoption_rate, '%')}</div>
-                        </div>
-                        {rd.kpis.adoption_rate_last4w != null && (
-                          <div style={{ borderLeft: '2px solid rgba(0,180,160,0.3)', paddingLeft: '1.25rem' }}>
-                            <div style={{ fontSize: '0.65rem', color: '#6b7280', marginBottom: 2 }}>Últimas 4 semanas {rd.kpis.last4w_label ?? ''}</div>
-                            <div style={{ fontSize: '2.5rem', fontWeight: 800, color: '#00B4A0', lineHeight: 1 }}>{rd.kpis.adoption_rate_last4w}%</div>
-                          </div>
-                        )}
-                      </div>
-                      <div className="hl-card-sub" style={{ marginTop: 6 }}>
+                      <div className="hl-card-value">{fmt(rd.kpis.adoption_rate, '%')}</div>
+                      <div className="hl-card-sub">
                         {rd.adoptionBefore !== null ? `${rd.adoptionBefore}%` : '—'}
                         {' (até '}{fmtShort(startD)}{') → '}
                         {fmt(rd.kpis.adoption_rate, '%')}
@@ -445,6 +434,23 @@ export default function ReportPage() {
                   </div>
 
                 </div>
+
+                {/* Adoção últimas 4 semanas — por baixo dos cards */}
+                {rd.kpis.adoption_rate_last4w != null && (
+                  <div style={{ marginTop: '1.5rem', display: 'flex', justifyContent: 'center' }}>
+                    <div style={{ background: '#f0fdfb', border: '2px solid #00B4A0', borderRadius: 12, padding: '1rem 2.5rem', textAlign: 'center' }}>
+                      <div style={{ fontSize: '0.7rem', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>
+                        Taxa de Adoção — Últimas 4 semanas {rd.kpis.last4w_label ?? ''}
+                      </div>
+                      <div style={{ fontSize: '3rem', fontWeight: 800, color: '#00B4A0', lineHeight: 1 }}>
+                        {rd.kpis.adoption_rate_last4w}%
+                      </div>
+                      <div style={{ fontSize: '0.7rem', color: '#6b7280', marginTop: 4 }}>
+                        Form. Novo / (Novo + Antigo) nas últimas 4 semanas ISO
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             );
           })()}
