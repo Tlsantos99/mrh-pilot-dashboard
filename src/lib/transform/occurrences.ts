@@ -183,6 +183,7 @@ export async function transformOccurrences(uploadId?: string) {
     const closingWeek = closingDate ? getISOWeek(closingDate) : null;
 
     // Lead Times (business days)
+    const ltParticipationOpening = businessDays(participationDate, openingDate);
     const ltOpeningAcceptance = businessDays(openingDate, acceptanceDate);
     const ltAcceptanceClosing = businessDays(acceptanceDate, closingDate);
     const ltTotal = businessDays(participationDate, closingDate);
@@ -218,6 +219,7 @@ export async function transformOccurrences(uploadId?: string) {
       acceptance_week: acceptanceWeek?.week ?? null,
       closing_year: closingWeek?.year ?? null,
       closing_week: closingWeek?.week ?? null,
+      lt_participation_opening: ltParticipationOpening,
       lt_opening_acceptance: ltOpeningAcceptance,
       lt_acceptance_closing: ltAcceptanceClosing,
       lt_total: ltTotal,

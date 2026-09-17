@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
     const filters = { ...rawFilters, status: undefined };
     const supabase = createServerClient();
 
-    const SEL = 'channel,has_expertise,lt_total,lt_opening_acceptance,lt_acceptance_closing,closing_date';
+    const SEL = 'channel,has_expertise,lt_total,lt_participation_opening,lt_opening_acceptance,lt_acceptance_closing,closing_date';
     const makeQ = () =>
       supabase.from('occurrences').select(SEL)
         .eq('eligible_for_pilot', true)
@@ -44,16 +44,17 @@ export async function GET(req: NextRequest) {
     if (e2) throw e2;
     const rows = [...(p1 ?? []), ...(p2 ?? [])];
 
-    type Acc = { year: number; week: number; week_label: string; channel: string; expertise_type: string; lt_totals: number[]; lt_oa: number[]; lt_ac: number[] };
+    type Acc = { year: number; week: number; week_label: string; channel: string; expertise_type: string; lt_totals: number[]; lt_po: number[]; lt_oa: number[]; lt_ac: number[] };
     const map = new Map<string, Acc>();
     for (const r of rows ?? []) {
       if (!r.closing_date) continue;
       const { year, week, label } = isoWeekOf(r.closing_date as string);
       const et = r.has_expertise ? 'Peritagem' : 'Gestão Direta';
       const key = `${label}__${r.channel}__${et}`;
-      if (!map.has(key)) map.set(key, { year, week, week_label: label, channel: r.channel, expertise_type: et, lt_totals: [], lt_oa: [], lt_ac: [] });
+      if (!map.has(key)) map.set(key, { year, week, week_label: label, channel: r.channel, expertise_type: et, lt_totals: [], lt_po: [], lt_oa: [], lt_ac: [] });
       const w = map.get(key)!;
       if (r.lt_total != null) w.lt_totals.push(r.lt_total as number);
+      if (r.lt_participation_opening != null) w.lt_po.push(r.lt_participation_opening as number);
       if (r.lt_opening_acceptance != null) w.lt_oa.push(r.lt_opening_acceptance as number);
       if (r.lt_acceptance_closing != null) w.lt_ac.push(r.lt_acceptance_closing as number);
     }
@@ -64,6 +65,7 @@ export async function GET(req: NextRequest) {
         year: w.year, week: w.week, week_label: w.week_label,
         channel: w.channel, expertise_type: w.expertise_type,
         total: w.lt_totals.length,
+        avg_lt_participation_opening: avg(w.lt_po),
         avg_lt_opening_acceptance: avg(w.lt_oa),
         avg_lt_acceptance_closing: avg(w.lt_ac),
         avg_lt_total: avg(w.lt_totals),

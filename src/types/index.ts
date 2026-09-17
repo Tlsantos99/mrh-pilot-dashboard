@@ -84,6 +84,7 @@ export interface LeadTimeWeekly {
   channel: string;
   expertise_type: string;
   total: number;
+  avg_lt_participation_opening: number;
   avg_lt_opening_acceptance: number;
   avg_lt_acceptance_closing: number;
   avg_lt_total: number;

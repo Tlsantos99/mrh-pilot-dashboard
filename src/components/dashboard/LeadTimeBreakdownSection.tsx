@@ -42,7 +42,7 @@ export default function LeadTimeBreakdownSection({ filters = {} }: Props) {
   });
 
   // Weighted average per week across all channels/expertise
-  function aggField(field: 'avg_lt_opening_acceptance' | 'avg_lt_acceptance_closing' | 'avg_lt_total') {
+  function aggField(field: 'avg_lt_participation_opening' | 'avg_lt_opening_acceptance' | 'avg_lt_acceptance_closing' | 'avg_lt_total') {
     return allWeekLabels.map(wl => {
       const rows = ltData.filter(d => d.week_label === wl && d[field] != null);
       if (!rows.length) return null;
@@ -52,24 +52,24 @@ export default function LeadTimeBreakdownSection({ filters = {} }: Props) {
     });
   }
 
+  const poData = aggField('avg_lt_participation_opening');
   const oaData = aggField('avg_lt_opening_acceptance');
-  const acData = aggField('avg_lt_acceptance_closing');
 
   const chartData = {
     labels: allWeekLabels,
     datasets: [
       {
         type: 'bar' as const,
-        label: 'Fase Abertura',
-        data: oaData,
+        label: 'LT Abertura (Participação→Abertura)',
+        data: poData,
         backgroundColor: '#00305E',
         borderRadius: 3,
         stack: 'lt',
       },
       {
         type: 'bar' as const,
-        label: 'Fase Aceitação',
-        data: acData,
+        label: 'LT Aceitação (Abertura→Aceitação)',
+        data: oaData,
         backgroundColor: '#00B4A0',
         borderRadius: 3,
         stack: 'lt',
@@ -111,32 +111,32 @@ export default function LeadTimeBreakdownSection({ filters = {} }: Props) {
     return vals.length ? Math.round(vals.reduce((a, b) => a + b, 0) / vals.length * 10) / 10 : null;
   }
 
+  const avgPO = globalAvg(poData);
   const avgOA = globalAvg(oaData);
-  const avgAC = globalAvg(acData);
-  const avgTotal = (avgOA != null && avgAC != null) ? Math.round((avgOA + avgAC) * 10) / 10 : null;
+  const avgTotal = (avgPO != null && avgOA != null) ? Math.round((avgPO + avgOA) * 10) / 10 : null;
 
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-3 gap-3">
         <div className="bg-blue-50 border border-blue-100 rounded-lg p-3 text-center">
-          <p className="text-xs text-gray-500">LT médio Fase Abertura</p>
-          <p className="text-2xl font-bold text-[#00305E]">{fmt1(avgOA)}</p>
-          <p className="text-[10px] text-gray-400 mt-0.5">abertura → aceitação pelo robot</p>
+          <p className="text-xs text-gray-500">LT Abertura</p>
+          <p className="text-2xl font-bold text-[#00305E]">{fmt1(avgPO)}</p>
+          <p className="text-[10px] text-gray-400 mt-0.5">Data Participação → Abertura Ocorrência</p>
         </div>
         <div className="bg-teal-50 border border-teal-100 rounded-lg p-3 text-center">
-          <p className="text-xs text-gray-500">LT médio Fase Aceitação</p>
-          <p className="text-2xl font-bold text-[#00B4A0]">{fmt1(avgAC)}</p>
-          <p className="text-[10px] text-gray-400 mt-0.5">aceitação → resolução</p>
+          <p className="text-xs text-gray-500">LT Aceitação</p>
+          <p className="text-2xl font-bold text-[#00B4A0]">{fmt1(avgOA)}</p>
+          <p className="text-[10px] text-gray-400 mt-0.5">Abertura Ocorrência → Aceitação Sinistro</p>
         </div>
         <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-center">
-          <p className="text-xs text-gray-500">LT médio Total</p>
+          <p className="text-xs text-gray-500">LT Total (soma)</p>
           <p className="text-2xl font-bold text-gray-700">{fmt1(avgTotal)}</p>
-          <p className="text-[10px] text-gray-400 mt-0.5">abertura → resolução (soma)</p>
+          <p className="text-[10px] text-gray-400 mt-0.5">Participação → Aceitação Sinistro</p>
         </div>
       </div>
       <div>
         <p className="text-xs text-gray-400 mb-2">
-          Barras empilhadas por semana — ocorrências encerradas, média ponderada por canal e tipo
+          Barras empilhadas por semana de fecho — navy = LT Abertura, teal = LT Aceitação
         </p>
         <Chart type="bar" data={chartData} options={options} height={90} />
       </div>
