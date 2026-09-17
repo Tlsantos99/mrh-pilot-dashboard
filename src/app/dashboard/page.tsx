@@ -16,6 +16,53 @@ import type { SummaryKPIs, DashboardFilters } from '@/types';
 
 interface LastUpdate { [key: string]: string }
 
+function ExportButton({ filters }: { filters: import('@/types').DashboardFilters }) {
+  const [loading, setLoading] = useState(false);
+
+  const handleExport = async () => {
+    setLoading(true);
+    try {
+      const p = new URLSearchParams();
+      if (filters.tipology) p.set('tipology', filters.tipology);
+      if (filters.wave) p.set('wave', filters.wave);
+      if (filters.channel) p.set('channel', filters.channel);
+      if (filters.expertise) p.set('expertise', filters.expertise);
+      if (filters.status) p.set('status', filters.status);
+      if (filters.max_date) p.set('max_date', filters.max_date);
+      const qs = p.toString();
+      const url = `/api/export/occurrences${qs ? `?${qs}` : ''}`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error('Erro na exportação');
+      const blob = await res.blob();
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      const cd = res.headers.get('Content-Disposition') ?? '';
+      const match = cd.match(/filename="([^"]+)"/);
+      link.download = match?.[1] ?? 'ocorrencias_piloto.csv';
+      link.click();
+      URL.revokeObjectURL(link.href);
+    } catch (e) {
+      alert('Erro na exportação: ' + String(e));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <button
+      onClick={handleExport}
+      disabled={loading}
+      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-[#00305E] border border-[#00305E]/30 rounded-lg hover:bg-blue-50 disabled:opacity-50 transition-colors shrink-0"
+      title="Exportar lista de ocorrências (Data Abertura, Id_SR, Wave, Canal, ASF Agregador)"
+    >
+      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+      </svg>
+      {loading ? 'A exportar...' : 'Exportar CSV'}
+    </button>
+  );
+}
+
 export default function DashboardPage() {
   return (
     <Suspense fallback={<LoadingState message="A carregar dashboard..." />}>
@@ -234,7 +281,10 @@ function DashboardContent() {
 
       {/* Section 1 — Adoção */}
       <div id="adocao" className="card p-6 scroll-mt-4">
-        <SectionHeader title="1. Taxa de Adoção" subtitle="Formulário Novo vs Antigo por semana" />
+        <div className="flex items-start justify-between mb-1">
+          <SectionHeader title="1. Taxa de Adoção" subtitle="Formulário Novo vs Antigo por semana" />
+          <ExportButton filters={filters} />
+        </div>
         {/* Adoption rate highlight */}
         <div className="flex flex-wrap gap-4 mb-6">
           <div className="bg-teal-50 rounded-xl px-6 py-4 text-center">
