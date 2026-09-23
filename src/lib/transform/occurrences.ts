@@ -57,6 +57,8 @@ export async function transformOccurrences(uploadId?: string) {
   // PostgREST caps responses at 1000 rows regardless of range size, so use PAGE_SIZE=1000
   // and stop only when a page is empty (not when it's smaller than requested).
   const PAGE_SIZE = 1000;
+  // PostgREST .in() is sent as a URL parameter; > ~200 IDs exceeds URL length limits.
+  const IN_CHUNK_SIZE = 200;
 
   // When uploadId is provided, scope to only the occurrence_ids in that upload
   // (then read ALL staging_global rows for those occurrence_ids, across all uploads).
@@ -81,23 +83,41 @@ export async function transformOccurrences(uploadId?: string) {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const globalRows: any[] = [];
-  let from = 0;
-  while (true) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let query: any = supabase
-      .from('staging_global')
-      .select('*')
-      .order('occurrence_id')
-      .order('process_number')
-      .range(from, from + PAGE_SIZE - 1);
-    if (scopedOccurrenceIds) {
-      query = query.in('occurrence_id', scopedOccurrenceIds);
+
+  if (scopedOccurrenceIds && scopedOccurrenceIds.length > 0) {
+    // Chunked .in() to avoid PostgREST URL length limits
+    for (let c = 0; c < scopedOccurrenceIds.length; c += IN_CHUNK_SIZE) {
+      const chunk = scopedOccurrenceIds.slice(c, c + IN_CHUNK_SIZE);
+      let cFrom = 0;
+      while (true) {
+        const { data: page, error: pageErr } = await supabase
+          .from('staging_global')
+          .select('*')
+          .in('occurrence_id', chunk)
+          .order('occurrence_id')
+          .order('process_number')
+          .range(cFrom, cFrom + PAGE_SIZE - 1);
+        if (pageErr) throw new Error(`staging_global page error: ${pageErr.message}`);
+        if (!page || page.length === 0) break;
+        globalRows.push(...page);
+        cFrom += PAGE_SIZE;
+      }
     }
-    const { data: page, error: pageErr } = await query;
-    if (pageErr) throw new Error(`staging_global page error: ${pageErr.message}`);
-    if (!page || page.length === 0) break;
-    globalRows.push(...page);
-    from += PAGE_SIZE;
+  } else if (!scopedOccurrenceIds) {
+    // Full unscoped transform — paginate without filter
+    let from = 0;
+    while (true) {
+      const { data: page, error: pageErr } = await supabase
+        .from('staging_global')
+        .select('*')
+        .order('occurrence_id')
+        .order('process_number')
+        .range(from, from + PAGE_SIZE - 1);
+      if (pageErr) throw new Error(`staging_global page error: ${pageErr.message}`);
+      if (!page || page.length === 0) break;
+      globalRows.push(...page);
+      from += PAGE_SIZE;
+    }
   }
 
   if (!globalRows || globalRows.length === 0) return { processed: 0 };
