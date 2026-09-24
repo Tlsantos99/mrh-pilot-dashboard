@@ -23,10 +23,11 @@ const WEEKLY_DATA = [
   { year: 2026, week: 35, week_label: '2026-W35', total_calls: 40, within_hours: 40, outside_hours: 0, answered: 37, abandoned: 3, answer_rate_within_hours: 92.5,  avg_duration_minutes: 7.5  },
   { year: 2026, week: 36, week_label: '2026-W36', total_calls: 30, within_hours: 30, outside_hours: 0, answered: 29, abandoned: 1, answer_rate_within_hours: 96.7,  avg_duration_minutes: 10.8 },
   { year: 2026, week: 37, week_label: '2026-W37', total_calls: 29, within_hours: 29, outside_hours: 0, answered: 28, abandoned: 1, answer_rate_within_hours: 96.6,  avg_duration_minutes: 7.6  },
+  { year: 2026, week: 38, week_label: '2026-W38', total_calls: 81, within_hours: 81, outside_hours: 0, answered: 77, abandoned: 5, answer_rate_within_hours: 95.1,  avg_duration_minutes: 9.0  },
 ];
 
-const TOTAL_OUTSIDE_HOURS = 9;
-const AVG_DURATION_MINUTES = 9.2;
+const TOTAL_OUTSIDE_HOURS = 10;
+const AVG_DURATION_MINUTES = 9.0;
 
 export async function GET(req: NextRequest) {
   try {
