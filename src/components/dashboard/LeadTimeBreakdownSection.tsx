@@ -18,6 +18,45 @@ function fmt1(v: number | null): string {
   return v != null ? `${v.toFixed(1)} dias` : '—';
 }
 
+function ExportButton({ filters }: { filters: DashboardFilters }) {
+  const [loading, setLoading] = useState(false);
+
+  const handleExport = async () => {
+    setLoading(true);
+    try {
+      const qs = buildQS({ ...filters, status: undefined });
+      const res = await fetch(`/api/export/lead-times${qs}`);
+      if (!res.ok) throw new Error('Erro na exportação');
+      const blob = await res.blob();
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      const cd = res.headers.get('Content-Disposition') ?? '';
+      const match = cd.match(/filename="([^"]+)"/);
+      link.download = match?.[1] ?? 'abertura_aceitacao.csv';
+      link.click();
+      URL.revokeObjectURL(link.href);
+    } catch (e) {
+      alert('Erro na exportação: ' + String(e));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <button
+      onClick={handleExport}
+      disabled={loading}
+      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-[#00305E] border border-[#00305E]/30 rounded-lg hover:bg-blue-50 disabled:opacity-50 transition-colors shrink-0"
+      title="Exportar ocorrências encerradas com datas e lead times (CSV)"
+    >
+      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+      </svg>
+      {loading ? 'A exportar...' : 'Exportar CSV'}
+    </button>
+  );
+}
+
 export default function LeadTimeBreakdownSection({ filters = {} }: Props) {
   const [ltData, setLtData] = useState<LeadTimeWeekly[]>([]);
   const [loading, setLoading] = useState(true);
@@ -117,6 +156,9 @@ export default function LeadTimeBreakdownSection({ filters = {} }: Props) {
 
   return (
     <div className="space-y-4">
+      <div className="flex justify-end">
+        <ExportButton filters={filters} />
+      </div>
       <div className="grid grid-cols-3 gap-3">
         <div className="bg-blue-50 border border-blue-100 rounded-lg p-3 text-center">
           <p className="text-xs text-gray-500">LT Abertura</p>
