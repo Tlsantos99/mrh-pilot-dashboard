@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import * as XLSX from 'xlsx';
 import { createServerClient } from '@/lib/supabase/server';
 import { readFilters, applyFilters } from '@/lib/utils/filters';
 
@@ -6,25 +7,9 @@ export const dynamic = 'force-dynamic';
 
 function fmtDate(d: string | null): string {
   if (!d) return '';
-  const parts = d.split('-');
+  const parts = d.substring(0, 10).split('-');
   if (parts.length !== 3) return d;
   return `${parts[2]}-${parts[1]}-${parts[0]}`;
-}
-
-function fmtDateTime(d: string | null): string {
-  if (!d) return '';
-  // participation_date may include time component
-  const date = d.substring(0, 10);
-  return fmtDate(date);
-}
-
-function csvCell(v: unknown): string {
-  if (v === null || v === undefined) return '';
-  const s = String(v);
-  if (s.includes(',') || s.includes('"') || s.includes('\n') || s.includes(';')) {
-    return '"' + s.replace(/"/g, '""') + '"';
-  }
-  return s;
 }
 
 export async function GET(req: NextRequest) {
@@ -70,54 +55,76 @@ export async function GET(req: NextRequest) {
       from += PAGE;
     }
 
-    const header = [
-      'Nr Ocorrência',
-      'Canal',
-      'ASF Agregador',
-      'Wave',
-      'Agente',
-      'Tipo',
-      'Semana Abertura',
-      'Data Participação',
-      'Data Abertura',
-      'Data Aceitação',
-      'Data Encerramento',
-      'LT Part→Abertura (dias úteis)',
-      'LT Abertura→Aceitação (dias úteis)',
-      'LT Aceitação→Fecho (dias úteis)',
-      'LT Total (dias úteis)',
+    // Build worksheet data — header row + data rows
+    const wsData: unknown[][] = [
+      [
+        'Nr Ocorrência',
+        'Canal',
+        'ASF Agregador',
+        'Wave',
+        'Agente',
+        'Tipo',
+        'Semana Abertura',
+        'Data Participação',
+        'Data Abertura',
+        'Data Aceitação',
+        'Data Encerramento',
+        'LT Part→Abertura (dias úteis)',
+        'LT Abertura→Aceitação (dias úteis)',
+        'LT Aceitação→Fecho (dias úteis)',
+        'LT Total (dias úteis)',
+      ],
+      ...rows.map(r => [
+        r.occurrence_id ?? '',
+        r.channel ?? '',
+        r.asf_aggregator ?? '',
+        r.wave_name ?? '',
+        r.agent_name ?? '',
+        r.has_expertise ? 'Peritagem' : 'Gestão Direta',
+        r.opening_week_label ?? '',
+        fmtDate(r.participation_date as string | null),
+        fmtDate(r.opening_date as string | null),
+        fmtDate(r.acceptance_date as string | null),
+        fmtDate(r.closing_date as string | null),
+        r.lt_participation_opening ?? '',
+        r.lt_opening_acceptance ?? '',
+        r.lt_acceptance_closing ?? '',
+        r.lt_total ?? '',
+      ]),
     ];
 
-    const lines: string[] = [header.map(csvCell).join(';')];
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
 
-    for (const r of rows) {
-      lines.push([
-        csvCell(r.occurrence_id),
-        csvCell(r.channel),
-        csvCell(r.asf_aggregator),
-        csvCell(r.wave_name),
-        csvCell(r.agent_name),
-        csvCell(r.has_expertise ? 'Peritagem' : 'Gestão Direta'),
-        csvCell(r.opening_week_label),
-        csvCell(fmtDateTime(r.participation_date as string | null)),
-        csvCell(fmtDate(r.opening_date as string | null)),
-        csvCell(fmtDate(r.acceptance_date as string | null)),
-        csvCell(fmtDate(r.closing_date as string | null)),
-        csvCell(r.lt_participation_opening),
-        csvCell(r.lt_opening_acceptance),
-        csvCell(r.lt_acceptance_closing),
-        csvCell(r.lt_total),
-      ].join(';'));
-    }
+    // Column widths
+    ws['!cols'] = [
+      { wch: 18 }, // Nr Ocorrência
+      { wch: 18 }, // Canal
+      { wch: 38 }, // ASF Agregador
+      { wch: 10 }, // Wave
+      { wch: 22 }, // Agente
+      { wch: 16 }, // Tipo
+      { wch: 13 }, // Semana
+      { wch: 14 }, // Data Participação
+      { wch: 14 }, // Data Abertura
+      { wch: 14 }, // Data Aceitação
+      { wch: 14 }, // Data Encerramento
+      { wch: 14 }, // LT Part→Abertura
+      { wch: 14 }, // LT Abertura→Aceitação
+      { wch: 14 }, // LT Aceitação→Fecho
+      { wch: 12 }, // LT Total
+    ];
 
-    const csv = '﻿' + 'sep=;\r\n' + lines.join('\r\n');
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Abertura Aceitação');
+
+    const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
     const today = new Date().toISOString().substring(0, 10);
-    const filename = `abertura_aceitacao_${today}.csv`;
+    const filename = `abertura_aceitacao_${today}.xlsx`;
 
-    return new NextResponse(csv, {
+    return new NextResponse(buf, {
       status: 200,
       headers: {
-        'Content-Type': 'text/csv; charset=utf-8',
+        'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         'Content-Disposition': `attachment; filename="${filename}"`,
       },
     });
