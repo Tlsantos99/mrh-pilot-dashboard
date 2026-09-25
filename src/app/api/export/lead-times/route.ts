@@ -110,7 +110,7 @@ export async function GET(req: NextRequest) {
       ].join(';'));
     }
 
-    const csv = '﻿' + lines.join('\r\n');
+    const csv = '﻿' + 'sep=;\r\n' + lines.join('\r\n');
     const today = new Date().toISOString().substring(0, 10);
     const filename = `abertura_aceitacao_${today}.csv`;
 
