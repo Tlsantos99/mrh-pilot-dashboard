@@ -45,6 +45,7 @@ interface ReportData {
   weekly: WeeklyCall[]; ltData: LtRow[];
   maxDate: string; callsMaxDate: string; generatedAt: string;
   adoptionBefore: number | null; adoptionBeforeDate: string;
+  tipologia: 'AGE' | 'PRIVATE';
 }
 
 function fmt(n: number | null | undefined, suffix = '') {
@@ -66,6 +67,7 @@ export default function ReportPage() {
   const today = new Date().toISOString().slice(0, 10);
   const [maxDate, setMaxDate] = useState(today);
   const [callsMaxDate, setCallsMaxDate] = useState(today);
+  const [tipologia, setTipologia] = useState<'AGE' | 'PRIVATE'>('AGE');
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<ReportData | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -79,14 +81,14 @@ export default function ReportPage() {
       const beforeDate = new Date(maxDate + 'T12:00:00');
       beforeDate.setDate(beforeDate.getDate() - 6);
       const beforeDateStr = beforeDate.toISOString().slice(0, 10);
-      const qs = `?max_date=${maxDate}`;
+      const qs = `?max_date=${maxDate}&tipologia=${tipologia}`;
       const callsQS = `?calls_max_date=${callsMaxDate}`;
       const [sumRes, agRes, callRes, ltRes, sumBeforeRes] = await Promise.all([
         fetch(`/api/metrics/summary${qs}`),
         fetch(`/api/metrics/agents${qs}`),
         fetch(`/api/metrics/calls${callsQS}`),
         fetch(`/api/metrics/lead-times${qs}`),
-        fetch(`/api/metrics/summary?max_date=${beforeDateStr}`),
+        fetch(`/api/metrics/summary?max_date=${beforeDateStr}&tipologia=${tipologia}`),
       ]);
       const { kpis } = await sumRes.json();
       const { data: agents } = await agRes.json();
@@ -101,6 +103,7 @@ export default function ReportPage() {
         generatedAt: new Date().toLocaleString('pt-PT'),
         adoptionBefore: kpisBefore?.adoption_rate ?? null,
         adoptionBeforeDate: beforeDateStr,
+        tipologia,
       });
     } catch (e) {
       setError(String(e));
@@ -243,6 +246,14 @@ export default function ReportPage() {
         </div>
         <div className="flex flex-wrap items-center gap-3 ml-auto">
           <div className="flex items-center gap-2">
+            <span className="text-xs text-blue-100 whitespace-nowrap">Rede:</span>
+            <select value={tipologia} onChange={e => setTipologia(e.target.value as 'AGE' | 'PRIVATE')}
+              className="px-2.5 py-1.5 rounded-lg text-[#00305E] text-sm font-medium bg-white">
+              <option value="AGE">AGE</option>
+              <option value="PRIVATE">Private</option>
+            </select>
+          </div>
+          <div className="flex items-center gap-2">
             <span className="text-xs text-blue-100 whitespace-nowrap">Corte piloto:</span>
             <input type="date" value={maxDate} onChange={e => setMaxDate(e.target.value)} max={today}
               className="px-2.5 py-1.5 rounded-lg text-[#00305E] text-sm font-medium bg-white" />
@@ -306,7 +317,9 @@ export default function ReportPage() {
               </span>
             </div>
             <div className="cover-logo">TOM HOUSEHOLD | PHASE 2</div>
-            <div className="cover-title">STATUS PILOTO AGENTES<br />FORMULÁRIO NOVO</div>
+            <div className="cover-title">
+              {data.tipologia === 'PRIVATE' ? <>STATUS PILOTO AGENTES<br />REDE PRIVATE</> : <>STATUS PILOTO AGENTES<br />FORMULÁRIO NOVO</>}
+            </div>
             <div className="cover-meta">
               <div>Dados piloto até: <strong>{fmtDate(data.maxDate)}</strong></div>
               <div>Dados chamadas até: <strong>{fmtDate(data.callsMaxDate)}</strong></div>
@@ -314,10 +327,19 @@ export default function ReportPage() {
               <div>Ramo: Riscos Múltiplos — Habitação</div>
             </div>
             <div className="cover-waves">
-              <div className="cover-wave-chip">WAVE 1 — 27 Mar 2026</div>
-              <div className="cover-wave-chip">WAVE 2 — 11 Mai 2026</div>
-              <div className="cover-wave-chip">WAVE 3 — 14 Jul 2026</div>
-              <div className="cover-wave-chip">WAVE 4 — 30 Jul 2026</div>
+              {data.tipologia === 'PRIVATE' ? (
+                <>
+                  <div className="cover-wave-chip">WAVE 5 — 7 Set 2026</div>
+                  <div className="cover-wave-chip">WAVE 6 — 14 Set 2026</div>
+                </>
+              ) : (
+                <>
+                  <div className="cover-wave-chip">WAVE 1 — 27 Mar 2026</div>
+                  <div className="cover-wave-chip">WAVE 2 — 11 Mai 2026</div>
+                  <div className="cover-wave-chip">WAVE 3 — 14 Jul 2026</div>
+                  <div className="cover-wave-chip">WAVE 4 — 30 Jul 2026</div>
+                </>
+              )}
             </div>
           </div>
 
