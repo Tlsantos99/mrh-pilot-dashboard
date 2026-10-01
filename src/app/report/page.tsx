@@ -81,14 +81,14 @@ export default function ReportPage() {
       const beforeDate = new Date(maxDate + 'T12:00:00');
       beforeDate.setDate(beforeDate.getDate() - 6);
       const beforeDateStr = beforeDate.toISOString().slice(0, 10);
-      const qs = `?max_date=${maxDate}&tipologia=${tipologia}`;
+      const qs = `?max_date=${maxDate}&tipology=${tipologia}`;
       const callsQS = `?calls_max_date=${callsMaxDate}`;
       const [sumRes, agRes, callRes, ltRes, sumBeforeRes] = await Promise.all([
         fetch(`/api/metrics/summary${qs}`),
         fetch(`/api/metrics/agents${qs}`),
         fetch(`/api/metrics/calls${callsQS}`),
         fetch(`/api/metrics/lead-times${qs}`),
-        fetch(`/api/metrics/summary?max_date=${beforeDateStr}&tipologia=${tipologia}`),
+        fetch(`/api/metrics/summary?max_date=${beforeDateStr}&tipology=${tipologia}`),
       ]);
       const { kpis } = await sumRes.json();
       const { data: agents } = await agRes.json();
