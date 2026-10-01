@@ -24,6 +24,7 @@ const WEEKLY_DATA = [
   { year: 2026, week: 36, week_label: '2026-W36', total_calls: 30, within_hours: 30, outside_hours: 0, answered: 29, abandoned: 1, answer_rate_within_hours: 96.7,  avg_duration_minutes: 10.8 },
   { year: 2026, week: 37, week_label: '2026-W37', total_calls: 29, within_hours: 29, outside_hours: 0, answered: 28, abandoned: 1, answer_rate_within_hours: 96.6,  avg_duration_minutes: 7.6  },
   { year: 2026, week: 38, week_label: '2026-W38', total_calls: 81, within_hours: 81, outside_hours: 0, answered: 77, abandoned: 5, answer_rate_within_hours: 95.1,  avg_duration_minutes: 9.0  },
+  { year: 2026, week: 39, week_label: '2026-W39', total_calls: 87, within_hours: 87, outside_hours: 0, answered: 84, abandoned: 5, answer_rate_within_hours: 96.6,  avg_duration_minutes: 9.0  },
 ];
 
 const TOTAL_OUTSIDE_HOURS = 10;
