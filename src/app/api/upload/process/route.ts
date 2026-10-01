@@ -243,10 +243,62 @@ export async function POST(req: NextRequest) {
       status: rejected === rawData.length ? 'error' : inserted === 0 ? 'duplicate' : 'success',
     }).eq('id', uploadId);
 
-    // Trigger transform for types that affect occurrences
+    // Trigger transform for types that affect occurrences.
+    // Global uploads: scope by uploadId (finds occurrence_ids in staging_global).
+    // Antigo/piloto: find occurrence_ids from their own staging tables and pass directly.
+    // Agentes: find occurrence_ids in staging_global for the newly synced agent_codes.
     if (['global', 'piloto', 'antigo', 'agentes'].includes(fileType)) {
       try {
-        await transformOccurrences(uploadId);
+        if (fileType === 'global') {
+          await transformOccurrences(uploadId);
+        } else if (fileType === 'antigo') {
+          const { data: antigoOids } = await supabase
+            .from('staging_formulario_antigo')
+            .select('occurrence_id')
+            .eq('upload_id', uploadId)
+            .not('occurrence_id', 'is', null);
+          const oids = Array.from(new Set((antigoOids ?? []).map((r: { occurrence_id: string }) => r.occurrence_id).filter(Boolean)));
+          if (oids.length > 0) await transformOccurrences(undefined, oids);
+        } else if (fileType === 'piloto') {
+          const { data: pilotoOids } = await supabase
+            .from('staging_piloto_agentes')
+            .select('occurrence_id')
+            .eq('upload_id', uploadId)
+            .not('occurrence_id', 'is', null);
+          const oids = Array.from(new Set((pilotoOids ?? []).map((r: { occurrence_id: string }) => r.occurrence_id).filter(Boolean)));
+          if (oids.length > 0) await transformOccurrences(undefined, oids);
+        } else if (fileType === 'agentes') {
+          // Agentes upload changes wave assignments — retransform all occurrences
+          // for the newly added/updated agent_codes.
+          const { data: newAgents } = await supabase
+            .from('staging_agentes')
+            .select('agent_code')
+            .eq('upload_id', uploadId)
+            .not('agent_code', 'is', null);
+          const agentCodes = (newAgents ?? []).map((r: { agent_code: string }) => r.agent_code).filter(Boolean);
+          if (agentCodes.length > 0) {
+            // Collect occurrence_ids for these agent_codes across all staging_global
+            const PAGE = 1000;
+            const allOids: string[] = [];
+            for (let ac = 0; ac < agentCodes.length; ac += 200) {
+              const chunk = agentCodes.slice(ac, ac + 200);
+              let from = 0;
+              while (true) {
+                const { data: page } = await supabase
+                  .from('staging_global')
+                  .select('occurrence_id')
+                  .in('agent_code', chunk)
+                  .range(from, from + PAGE - 1);
+                if (!page || page.length === 0) break;
+                for (const r of page) if (r.occurrence_id) allOids.push(r.occurrence_id);
+                if (page.length < PAGE) break;
+                from += PAGE;
+              }
+            }
+            const oids = Array.from(new Set(allOids));
+            if (oids.length > 0) await transformOccurrences(undefined, oids);
+          }
+        }
       } catch (transformErr) {
         console.error('Transform error (non-blocking):', transformErr);
       }

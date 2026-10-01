@@ -18,7 +18,7 @@ interface AgentMap {
 interface PilotoSet { [occurrenceId: string]: string } // occurrenceId -> upload_id
 interface AntigoSet { [occurrenceId: string]: string } // occurrenceId -> upload_id
 
-export async function transformOccurrences(uploadId?: string) {
+export async function transformOccurrences(uploadId?: string, prebuiltScopedIds?: string[]) {
   const supabase = createServerClient();
 
   // 1. Load agent map
@@ -60,11 +60,14 @@ export async function transformOccurrences(uploadId?: string) {
   // PostgREST .in() is sent as a URL parameter; > ~200 IDs exceeds URL length limits.
   const IN_CHUNK_SIZE = 200;
 
-  // When uploadId is provided, scope to only the occurrence_ids in that upload
-  // (then read ALL staging_global rows for those occurrence_ids, across all uploads).
-  // This makes incremental retransforms fast without missing cross-upload data.
+  // Scoping logic:
+  // - prebuiltScopedIds: caller already resolved the occurrence_ids (antigo/piloto/agentes uploads)
+  // - uploadId only: look up occurrence_ids from staging_global (global uploads)
+  // - neither: full unscoped retransform
   let scopedOccurrenceIds: string[] | null = null;
-  if (uploadId) {
+  if (prebuiltScopedIds) {
+    scopedOccurrenceIds = prebuiltScopedIds;
+  } else if (uploadId) {
     const oidPages: string[] = [];
     let oidFrom = 0;
     while (true) {
