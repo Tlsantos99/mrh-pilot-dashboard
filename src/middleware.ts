@@ -1,50 +1,10 @@
 import { NextResponse } from 'next/server';
-import type { NextRequest } from 'next/server';
 
-const SESSION_COOKIE = 'mrh_session';
-
-async function sign(data: string, secret: string): Promise<string> {
-  const key = await crypto.subtle.importKey(
-    'raw',
-    new TextEncoder().encode(secret),
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign']
+export function middleware() {
+  return new NextResponse(
+    '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Acesso Indisponível</title><style>body{font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#f1f5f9}div{text-align:center;max-width:400px;padding:2rem}h1{color:#00305E;font-size:1.5rem;margin-bottom:1rem}p{color:#6b7280;font-size:0.95rem;line-height:1.6}</style></head><body><div><h1>Acesso Temporariamente Indisponível</h1><p>Este portal encontra-se temporariamente indisponível. Por favor, tente mais tarde.</p></div></body></html>',
+    { status: 503, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
   );
-  const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(data));
-  return Array.from(new Uint8Array(sig)).map(b => b.toString(16).padStart(2, '0')).join('');
-}
-
-async function verifySession(token: string): Promise<boolean> {
-  const secret = process.env.DASHBOARD_SECRET;
-  const username = process.env.DASHBOARD_USERNAME;
-  if (!secret || !username || !token) return false;
-  const expected = await sign(`${username}:${secret}`, secret);
-  return token === expected;
-}
-
-export async function middleware(request: NextRequest) {
-  const { pathname } = request.nextUrl;
-
-  if (
-    pathname === '/login' ||
-    pathname.startsWith('/api/auth/') ||
-    pathname.startsWith('/_next/') ||
-    pathname === '/favicon.ico'
-  ) {
-    return NextResponse.next();
-  }
-
-  const token = request.cookies.get(SESSION_COOKIE)?.value;
-  const valid = await verifySession(token ?? '');
-
-  if (!valid) {
-    const url = request.nextUrl.clone();
-    url.pathname = '/login';
-    return NextResponse.redirect(url);
-  }
-
-  return NextResponse.next();
 }
 
 export const config = {
