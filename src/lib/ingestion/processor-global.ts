@@ -83,6 +83,8 @@ export function processGlobalRow(raw: RawRow, uploadId: string, sourceRow: numbe
     occurrence_status: mapped.occurrence_status,
     service_number: mapped.service_number,
     expertise_costs: mapped.expertise_costs,
+    closing_date_admin: mapped.closing_date_admin,
+    closing_date_accounting: mapped.closing_date_accounting,
   };
 
   return { ...mapped, row_hash: computeRowHash(hashData) };
