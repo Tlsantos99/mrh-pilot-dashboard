@@ -1,6 +1,7 @@
 'use client';
 import { useState, useCallback } from 'react';
 import UploadHistory from '@/components/upload/UploadHistory';
+import { supabase } from '@/lib/supabase/client';
 import type { FileType } from '@/types';
 
 const LARGE_FILE_THRESHOLD = 3 * 1024 * 1024; // 3 MB → bypass server validate, use chunked upload
@@ -123,12 +124,27 @@ export default function DataManagementPage() {
           ? (wb.SheetNames.find((s: string) => s.includes('OneReport')) ?? wb.SheetNames[0])
           : wb.SheetNames[0];
         const sheet = wb.Sheets[sheetName];
-        if (!sheet?.['!ref']) throw new Error('Folha sem dados');
+        const sizeMB = (f.size / 1024 / 1024).toFixed(1);
+        const detectedType = (manualType || quickDetectType(f.name)) as FileType | null;
+
+        if (!sheet?.['!ref']) {
+          // XLSX.js can't parse this file in the browser (too large) — use Storage upload path
+          setValidation({
+            fileType: detectedType ?? undefined,
+            rowsFound: 0,
+            rowsNew: 0,
+            rowsDuplicate: 0,
+            ready: !!detectedType,
+            errors: detectedType ? [] : ['Tipo não identificado — seleciona manualmente.'],
+            warnings: [`Ficheiro muito grande (${sizeMB} MB) — será enviado diretamente para processamento no servidor.`],
+          });
+          setValidating(false);
+          return;
+        }
+
         const range = XLSX.utils.decode_range(sheet['!ref']);
         const headerRow = isChamadas ? 3 : 0;
         const totalRows = Math.max(0, range.e.r - headerRow);
-        const detectedType = (manualType || quickDetectType(f.name)) as FileType | null;
-        const sizeMB = (f.size / 1024 / 1024).toFixed(1);
         setValidation({
           fileType: detectedType ?? undefined,
           rowsFound: totalRows,
@@ -281,7 +297,53 @@ export default function DataManagementPage() {
     }
   };
 
-  const handleImport = isLargeFile ? handleChunkedImport : handleRegularImport;
+  // Storage upload path: used when XLSX.js can't parse the file in browser (too large)
+  const handleStorageImport = async () => {
+    if (!file || !validation?.ready) return;
+    const fileType = (manualType || validation.fileType) as FileType;
+    if (!fileType) return;
+    setProcessing(true);
+    setResult(null);
+
+    try {
+      // Compute SHA-256 hash
+      const uint8 = new Uint8Array(await file.arrayBuffer());
+      const hashBuffer = await crypto.subtle.digest('SHA-256', uint8);
+      const fileHash = Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+
+      // Upload raw file to Supabase Storage
+      const storagePath = `uploads/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+      const { error: uploadErr } = await supabase.storage.from('temp-uploads').upload(storagePath, file, { upsert: true });
+      if (uploadErr) throw new Error(`Falha no upload para Storage: ${uploadErr.message}`);
+
+      // Call server to process from Storage
+      const res = await fetch('/api/upload/process-storage', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ storagePath, filename: file.name, fileType, fileHash }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+        throw new Error(err.error ?? err.detail ?? `Erro ${res.status}`);
+      }
+
+      const data = await res.json();
+      setResult({ status: data.status, rowsReceived: data.rowsReceived, rowsInserted: data.rowsInserted, rowsRejected: data.rowsRejected, message: data.message });
+      setHistoryKey(k => k + 1);
+      setFile(null);
+      setValidation(null);
+      setIsLargeFile(false);
+    } catch (e) {
+      setResult({ status: 'error', message: e instanceof Error ? e.message : String(e) });
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  // Use Storage upload when rowsFound === 0 (XLSX.js failed to parse) and file is large
+  const needsStorageUpload = isLargeFile && (validation?.rowsFound ?? 0) === 0;
+  const handleImport = needsStorageUpload ? handleStorageImport : (isLargeFile ? handleChunkedImport : handleRegularImport);
 
   const reset = () => {
     setFile(null);
