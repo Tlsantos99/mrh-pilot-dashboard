@@ -321,16 +321,20 @@ export default function DataManagementPage() {
         const slice = uint8.slice(i * BYTE_CHUNK, (i + 1) * BYTE_CHUNK);
         const blob = new Blob([slice], { type: 'application/octet-stream' });
 
-        const fd = new FormData();
-        fd.append('chunk', blob, `chunk_${i}`);
-        fd.append('chunkIndex', String(i));
-        fd.append('totalChunks', String(totalChunks));
-        fd.append('uploadToken', uploadToken);
-        fd.append('filename', file.name);
-        fd.append('fileType', fileType);
-        fd.append('fileHash', fileHash);
+        const params = new URLSearchParams({
+          chunkIndex: String(i),
+          totalChunks: String(totalChunks),
+          uploadToken,
+          filename: file.name,
+          fileType,
+          fileHash,
+        });
 
-        const res = await fetch('/api/upload/chunk-raw', { method: 'POST', body: fd });
+        const res = await fetch(`/api/upload/chunk-raw?${params}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/octet-stream' },
+          body: blob,
+        });
         if (!res.ok) {
           const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
           throw new Error(err.error ?? err.detail ?? `Chunk ${i + 1} falhou`);
