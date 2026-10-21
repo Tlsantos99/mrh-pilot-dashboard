@@ -1,7 +1,6 @@
 'use client';
 import { useState, useCallback } from 'react';
 import UploadHistory from '@/components/upload/UploadHistory';
-import { supabase } from '@/lib/supabase/client';
 import type { FileType } from '@/types';
 
 const LARGE_FILE_THRESHOLD = 3 * 1024 * 1024; // 3 MB → bypass server validate, use chunked upload
@@ -297,53 +296,81 @@ export default function DataManagementPage() {
     }
   };
 
-  // Storage upload path: used when XLSX.js can't parse the file in browser (too large)
-  const handleStorageImport = async () => {
+  // Binary chunked upload via server: used when XLSX.js can't parse the file in browser (too large)
+  // Sends raw binary chunks to /api/upload/chunk-raw which uses service role to bypass RLS
+  const handleChunkRawImport = async () => {
     if (!file || !validation?.ready) return;
     const fileType = (manualType || validation.fileType) as FileType;
     if (!fileType) return;
     setProcessing(true);
     setResult(null);
 
+    const BYTE_CHUNK = 3 * 1024 * 1024; // 3 MB binary chunks (well under 4.5 MB Vercel limit)
+
     try {
-      // Compute SHA-256 hash
       const uint8 = new Uint8Array(await file.arrayBuffer());
       const hashBuffer = await crypto.subtle.digest('SHA-256', uint8);
       const fileHash = Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
 
-      // Upload raw file to Supabase Storage
-      const storagePath = `uploads/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
-      const { error: uploadErr } = await supabase.storage.from('temp-uploads').upload(storagePath, file, { upsert: true });
-      if (uploadErr) throw new Error(`Falha no upload para Storage: ${uploadErr.message}`);
+      const totalChunks = Math.ceil(uint8.byteLength / BYTE_CHUNK);
+      const uploadToken = `${Date.now()}_${Math.random().toString(36).slice(2)}`;
 
-      // Call server to process from Storage
-      const res = await fetch('/api/upload/process-storage', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ storagePath, filename: file.name, fileType, fileHash }),
-      });
+      setProgress({ sent: 0, total: totalChunks, phase: 'uploading' });
 
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
-        throw new Error(err.error ?? err.detail ?? `Erro ${res.status}`);
+      for (let i = 0; i < totalChunks; i++) {
+        const slice = uint8.slice(i * BYTE_CHUNK, (i + 1) * BYTE_CHUNK);
+        const blob = new Blob([slice], { type: 'application/octet-stream' });
+
+        const fd = new FormData();
+        fd.append('chunk', blob, `chunk_${i}`);
+        fd.append('chunkIndex', String(i));
+        fd.append('totalChunks', String(totalChunks));
+        fd.append('uploadToken', uploadToken);
+        fd.append('filename', file.name);
+        fd.append('fileType', fileType);
+        fd.append('fileHash', fileHash);
+
+        const res = await fetch('/api/upload/chunk-raw', { method: 'POST', body: fd });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+          throw new Error(err.error ?? err.detail ?? `Chunk ${i + 1} falhou`);
+        }
+
+        const data = await res.json();
+
+        // Duplicate detected on first chunk
+        if (data.status === 'duplicate') {
+          setResult({ status: 'duplicate', message: data.message });
+          setHistoryKey(k => k + 1);
+          setFile(null);
+          setValidation(null);
+          setIsLargeFile(false);
+          return;
+        }
+
+        // Last chunk: final result
+        if (i === totalChunks - 1) {
+          setResult({ status: data.status, rowsReceived: data.rowsReceived, rowsInserted: data.rowsInserted, rowsRejected: data.rowsRejected });
+          setHistoryKey(k => k + 1);
+          setFile(null);
+          setValidation(null);
+          setIsLargeFile(false);
+          return;
+        }
+
+        setProgress({ sent: i + 1, total: totalChunks, phase: 'uploading' });
       }
-
-      const data = await res.json();
-      setResult({ status: data.status, rowsReceived: data.rowsReceived, rowsInserted: data.rowsInserted, rowsRejected: data.rowsRejected, message: data.message });
-      setHistoryKey(k => k + 1);
-      setFile(null);
-      setValidation(null);
-      setIsLargeFile(false);
     } catch (e) {
       setResult({ status: 'error', message: e instanceof Error ? e.message : String(e) });
     } finally {
       setProcessing(false);
+      setProgress(null);
     }
   };
 
-  // Use Storage upload when rowsFound === 0 (XLSX.js failed to parse) and file is large
-  const needsStorageUpload = isLargeFile && (validation?.rowsFound ?? 0) === 0;
-  const handleImport = needsStorageUpload ? handleStorageImport : (isLargeFile ? handleChunkedImport : handleRegularImport);
+  // Use binary chunk-raw upload when XLSX.js failed to parse (rowsFound === 0) and file is large
+  const needsChunkRaw = isLargeFile && (validation?.rowsFound ?? 0) === 0;
+  const handleImport = needsChunkRaw ? handleChunkRawImport : (isLargeFile ? handleChunkedImport : handleRegularImport);
 
   const reset = () => {
     setFile(null);
