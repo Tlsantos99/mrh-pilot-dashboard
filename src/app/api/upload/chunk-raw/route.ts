@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import * as XLSX from 'xlsx';
+import { writeFileSync, unlinkSync } from 'fs';
 import { createServerClient } from '@/lib/supabase/server';
 import { detectFileType } from '@/lib/ingestion/detector';
 import { processGlobalRow } from '@/lib/ingestion/processor-global';
@@ -14,8 +15,48 @@ export const maxDuration = 300;
 
 const BATCH_SIZE = 500;
 
-// Sends each chunk as raw binary body (Content-Type: application/octet-stream)
-// Metadata passed via query string to avoid multipart complexity
+function parseXlsx(buffer: Buffer, filename: string): Record<string, unknown>[] {
+  const isServiceReport = /^Service Performance Report/i.test(filename);
+  const isChamadas = filename.toLowerCase().includes('chamadas');
+
+  // Try /tmp file approach first — more reliable for large files in Node.js
+  let workbook: XLSX.WorkBook | null = null;
+  const tmpPath = `/tmp/chunk_raw_${Date.now()}.xlsx`;
+  try {
+    writeFileSync(tmpPath, buffer);
+    workbook = XLSX.readFile(tmpPath, { cellDates: false, raw: true });
+  } catch {
+    // fall through to buffer approach
+  } finally {
+    try { unlinkSync(tmpPath); } catch {}
+  }
+
+  // Fallback: read directly from buffer
+  if (!workbook || workbook.SheetNames.length === 0) {
+    workbook = XLSX.read(new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength), {
+      type: 'array', cellDates: false, raw: true,
+    });
+  }
+
+  if (workbook.SheetNames.length === 0) {
+    throw new Error(`XLSX sem sheets. Tamanho buffer: ${buffer.length}b, magic: ${buffer.slice(0, 4).toString('hex')}`);
+  }
+
+  let sheetName = workbook.SheetNames[0];
+  if (isChamadas) sheetName = workbook.SheetNames.find((s: string) => s.includes('OneReport') || s.includes('Simplificado')) ?? sheetName;
+  if (isServiceReport) sheetName = workbook.SheetNames[1] ?? sheetName;
+
+  const sheet = workbook.Sheets[sheetName];
+  if (!sheet) throw new Error(`Sheet "${sheetName}" não encontrada`);
+
+  if (isServiceReport) {
+    const allArrays = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, raw: true, defval: null }) as unknown[][];
+    return allArrays.slice(5).map((row) => Object.fromEntries((row as unknown[]).map((v, i) => [String(i), v])));
+  }
+
+  return XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { raw: true, defval: null, range: isChamadas ? 3 : 0 });
+}
+
 export async function POST(req: NextRequest) {
   try {
     const supabase = createServerClient();
@@ -24,7 +65,7 @@ export async function POST(req: NextRequest) {
     const chunkIndex = parseInt(searchParams.get('chunkIndex') ?? '');
     const totalChunks = parseInt(searchParams.get('totalChunks') ?? '');
     const uploadToken = searchParams.get('uploadToken') ?? '';
-    const filename = searchParams.get('filename') ?? '';
+    const filename = decodeURIComponent(searchParams.get('filename') ?? '');
     const fileType = (searchParams.get('fileType') ?? null) as FileType | null;
     const fileHash = searchParams.get('fileHash') ?? '';
 
@@ -35,7 +76,7 @@ export async function POST(req: NextRequest) {
     // Read raw binary body
     const chunkBuffer = Buffer.from(await req.arrayBuffer());
 
-    // Check duplicate on first chunk only
+    // Duplicate check on first chunk
     if (chunkIndex === 0) {
       const { data: existing } = await supabase
         .from('upload_history')
@@ -47,30 +88,34 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Store chunk using service role (bypasses Storage RLS)
+    // Store chunk using service role (bypasses Storage RLS entirely)
     const chunkPath = `chunks/${uploadToken}/chunk_${String(chunkIndex).padStart(4, '0')}`;
     const { error: storeErr } = await supabase.storage
       .from('temp-uploads')
       .upload(chunkPath, chunkBuffer, { upsert: true, contentType: 'application/octet-stream' });
 
     if (storeErr) {
-      return NextResponse.json({ error: `Erro ao guardar chunk: ${storeErr.message}` }, { status: 500 });
+      return NextResponse.json({ error: `Erro ao guardar chunk ${chunkIndex}: ${storeErr.message}` }, { status: 500 });
     }
 
-    // If not last chunk, acknowledge and stop
+    // Not last chunk — acknowledge
     if (chunkIndex < totalChunks - 1) {
       return NextResponse.json({ status: 'chunk_received', chunkIndex });
     }
 
-    // Last chunk: assemble all chunks
+    // Last chunk: download and assemble all chunks
     const allChunks: Buffer[] = [];
     for (let i = 0; i < totalChunks; i++) {
       const path = `chunks/${uploadToken}/chunk_${String(i).padStart(4, '0')}`;
       const { data: chunkData, error: dlErr } = await supabase.storage.from('temp-uploads').download(path);
       if (dlErr || !chunkData) {
-        return NextResponse.json({ error: `Erro ao reassemblar chunk ${i}: ${dlErr?.message ?? 'null'}` }, { status: 500 });
+        return NextResponse.json({ error: `Erro ao descarregar chunk ${i}: ${dlErr?.message ?? 'dados nulos'}` }, { status: 500 });
       }
-      allChunks.push(Buffer.from(await chunkData.arrayBuffer()));
+      const buf = Buffer.from(await chunkData.arrayBuffer());
+      if (buf.length === 0) {
+        return NextResponse.json({ error: `Chunk ${i} vazio após download` }, { status: 500 });
+      }
+      allChunks.push(buf);
     }
 
     const fullBuffer = Buffer.concat(allChunks);
@@ -81,24 +126,33 @@ export async function POST(req: NextRequest) {
     );
     supabase.storage.from('temp-uploads').remove(chunkPaths).catch(() => {});
 
-    // Parse XLSX server-side (Node.js handles large files without issue)
-    const isServiceReport = /^Service Performance Report/i.test(filename);
-    const isChamadas = filename.toLowerCase().includes('chamadas');
-    const workbook = XLSX.read(fullBuffer, { type: 'buffer', cellDates: false });
-    let sheetName = workbook.SheetNames[0];
-    if (isChamadas) sheetName = workbook.SheetNames.find((s: string) => s.includes('OneReport') || s.includes('Simplificado')) ?? sheetName;
-    if (isServiceReport) sheetName = workbook.SheetNames[1] ?? sheetName;
-    const sheet = workbook.Sheets[sheetName];
-
-    let rawData: Record<string, unknown>[];
-    if (isServiceReport) {
-      const allArrays = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, raw: true, defval: null }) as unknown[][];
-      rawData = allArrays.slice(5).map((row) => Object.fromEntries((row as unknown[]).map((v, i) => [String(i), v])));
-    } else {
-      rawData = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { raw: true, defval: null, range: isChamadas ? 3 : 0 });
+    // Validate buffer integrity (XLSX = ZIP, magic bytes PK)
+    if (fullBuffer.length < 100 || fullBuffer[0] !== 0x50 || fullBuffer[1] !== 0x4B) {
+      return NextResponse.json({
+        error: `Buffer inválido após montagem. Tamanho: ${fullBuffer.length}b, início: ${fullBuffer.slice(0, 4).toString('hex')}`,
+        status: 'error',
+      }, { status: 500 });
     }
 
-    const headers = rawData.length > 0 ? Object.keys(rawData[0]) : [];
+    // Parse XLSX (tries /tmp file first, then buffer fallback)
+    let rawData: Record<string, unknown>[];
+    try {
+      rawData = parseXlsx(fullBuffer, filename);
+    } catch (parseErr) {
+      return NextResponse.json({
+        error: `Erro ao analisar XLSX: ${parseErr instanceof Error ? parseErr.message : String(parseErr)}`,
+        status: 'error',
+      }, { status: 500 });
+    }
+
+    if (rawData.length === 0) {
+      return NextResponse.json({
+        error: `Ficheiro não contém dados. Verifica se o ficheiro está corrompido. Tamanho: ${fullBuffer.length}b`,
+        status: 'error',
+      }, { status: 500 });
+    }
+
+    const headers = Object.keys(rawData[0]);
     const resolvedFileType: FileType = fileType ?? detectFileType(filename, headers).fileType ?? 'global';
 
     const { data: uploadRecord, error: uploadErr } = await supabase
@@ -144,7 +198,7 @@ export async function POST(req: NextRequest) {
           .upsert(batch, { onConflict: 'row_hash', ignoreDuplicates: true })
           .select('id');
         if (error) rejected += batch.length;
-        else inserted += upserted?.length ?? batch.length;
+        else inserted += upserted?.length ?? 0;
       }
 
       if (resolvedFileType === 'agentes') {
@@ -167,14 +221,23 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    const finalStatus = rejected === rawData.length ? 'error' : inserted === 0 ? 'duplicate' : 'success';
+
     await supabase.from('upload_history').update({
       rows_inserted: inserted,
       rows_rejected: rejected,
       rows_updated: 0,
-      status: rejected === rawData.length ? 'error' : inserted === 0 ? 'duplicate' : 'success',
+      status: finalStatus,
     }).eq('id', uploadId);
 
-    return NextResponse.json({ status: 'success', uploadId, fileType: resolvedFileType, rowsReceived: rawData.length, rowsInserted: inserted, rowsRejected: rejected });
+    return NextResponse.json({
+      status: finalStatus,
+      uploadId,
+      fileType: resolvedFileType,
+      rowsReceived: rawData.length,
+      rowsInserted: inserted,
+      rowsRejected: rejected,
+    });
 
   } catch (err) {
     console.error('chunk-raw error:', err);
