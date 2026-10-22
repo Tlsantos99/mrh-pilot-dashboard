@@ -38,16 +38,23 @@ function parseXlsx(buffer: Buffer, filename: string): Record<string, unknown>[] 
     });
   }
 
-  if (workbook.SheetNames.length === 0) {
+  // Use Object.keys(Sheets) — SheetNames can have encoding mismatches vs actual keys
+  const sheetKeys = Object.keys(workbook.Sheets);
+  if (sheetKeys.length === 0) {
     throw new Error(`XLSX sem sheets. Tamanho buffer: ${buffer.length}b, magic: ${buffer.slice(0, 4).toString('hex')}`);
   }
 
-  let sheetName = workbook.SheetNames[0];
-  if (isChamadas) sheetName = workbook.SheetNames.find((s: string) => s.includes('OneReport') || s.includes('Simplificado')) ?? sheetName;
-  if (isServiceReport) sheetName = workbook.SheetNames[1] ?? sheetName;
+  let sheetKey: string;
+  if (isChamadas) {
+    sheetKey = sheetKeys.find((s) => s.includes('OneReport') || s.includes('Simplificado')) ?? sheetKeys[0];
+  } else if (isServiceReport) {
+    sheetKey = sheetKeys[1] ?? sheetKeys[0];
+  } else {
+    sheetKey = sheetKeys[0];
+  }
 
-  const sheet = workbook.Sheets[sheetName];
-  if (!sheet) throw new Error(`Sheet "${sheetName}" não encontrada`);
+  const sheet = workbook.Sheets[sheetKey];
+  if (!sheet) throw new Error(`Sheet "${sheetKey}" não encontrada`);
 
   if (isServiceReport) {
     const allArrays = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, raw: true, defval: null }) as unknown[][];
