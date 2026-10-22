@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import * as XLSX from 'xlsx';
 import { writeFileSync, unlinkSync } from 'fs';
 import { createServerClient } from '@/lib/supabase/server';
 import { detectFileType } from '@/lib/ingestion/detector';
@@ -15,53 +14,82 @@ export const maxDuration = 300;
 
 const BATCH_SIZE = 500;
 
-function parseXlsx(buffer: Buffer, filename: string): Record<string, unknown>[] {
-  const isServiceReport = /^Service Performance Report/i.test(filename);
-  const isChamadas = filename.toLowerCase().includes('chamadas');
+// Extract a raw value from an ExcelJS cell (handles richText, formula, hyperlink)
+function cellVal(v: unknown): unknown {
+  if (v === null || v === undefined) return null;
+  if (typeof v !== 'object') return v;
+  const obj = v as Record<string, unknown>;
+  if (Array.isArray(obj['richText'])) {
+    return (obj['richText'] as Array<{ text?: string }>).map((r) => r.text ?? '').join('');
+  }
+  if ('formula' in obj) return obj['result'] ?? null;
+  if ('error' in obj) return null;
+  if ('text' in obj) return obj['text'];
+  if (v instanceof Date) return v.toISOString().slice(0, 10);
+  return v;
+}
 
-  // Try /tmp file approach first — more reliable for large files in Node.js
-  let workbook: XLSX.WorkBook | null = null;
-  const tmpPath = `/tmp/chunk_raw_${Date.now()}.xlsx`;
+async function parseWithExcelJS(buffer: Buffer, filename: string): Promise<Record<string, unknown>[]> {
+  // Write to /tmp — ExcelJS streaming reads from file path
+  const tmpPath = `/tmp/exj_${Date.now()}.xlsx`;
+  writeFileSync(tmpPath, buffer);
+
   try {
-    writeFileSync(tmpPath, buffer);
-    workbook = XLSX.readFile(tmpPath, { cellDates: false, raw: true });
-  } catch {
-    // fall through to buffer approach
+    // Dynamic import so this large module isn't loaded for non-large-file routes
+    const ExcelJS = (await import('exceljs')).default;
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.readFile(tmpPath);
+
+    const isServiceReport = /^Service Performance Report/i.test(filename);
+    const isChamadas = filename.toLowerCase().includes('chamadas');
+
+    let ws = wb.worksheets[0];
+    if (isChamadas) {
+      ws = wb.worksheets.find((s) => s.name.includes('OneReport') || s.name.includes('Simplificado')) ?? wb.worksheets[0];
+    } else if (isServiceReport) {
+      ws = wb.worksheets[1] ?? wb.worksheets[0];
+    }
+
+    if (!ws) throw new Error('Nenhuma worksheet encontrada');
+
+    const rows: Record<string, unknown>[] = [];
+
+    if (isServiceReport) {
+      // Service report: no header row, use column index as key; skip first 5 rows
+      ws.eachRow((row, rowNum) => {
+        if (rowNum <= 5) return;
+        const obj: Record<string, unknown> = {};
+        (row.values as unknown[]).slice(1).forEach((v, i) => { obj[String(i)] = cellVal(v); });
+        rows.push(obj);
+      });
+      return rows;
+    }
+
+    // All other types: first row = headers
+    const headerRowNum = isChamadas ? 4 : 1;
+    const headers: string[] = [];
+
+    ws.eachRow((row, rowNum) => {
+      const vals = (row.values as unknown[]).slice(1); // 1-indexed → 0-indexed
+
+      if (rowNum === headerRowNum) {
+        vals.forEach((v, i) => { headers[i] = String(cellVal(v) ?? ''); });
+        return;
+      }
+      if (rowNum < headerRowNum || headers.length === 0) return;
+
+      const obj: Record<string, unknown> = {};
+      vals.forEach((v, i) => {
+        const h = headers[i];
+        if (h) obj[h] = cellVal(v);
+      });
+      rows.push(obj);
+    });
+
+    return rows;
   } finally {
     try { unlinkSync(tmpPath); } catch {}
   }
-
-  // Fallback: read directly from buffer
-  if (!workbook || workbook.SheetNames.length === 0) {
-    workbook = XLSX.read(new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength), {
-      type: 'array', cellDates: false, raw: true,
-    });
-  }
-
-  // Use Object.keys(Sheets) — SheetNames can have encoding mismatches vs actual keys
-  const sheetKeys = Object.keys(workbook.Sheets);
-  if (sheetKeys.length === 0) {
-    throw new Error(`XLSX sem sheets. Tamanho buffer: ${buffer.length}b, magic: ${buffer.slice(0, 4).toString('hex')}`);
-  }
-
-  let sheetKey: string;
-  if (isChamadas) {
-    sheetKey = sheetKeys.find((s) => s.includes('OneReport') || s.includes('Simplificado')) ?? sheetKeys[0];
-  } else if (isServiceReport) {
-    sheetKey = sheetKeys[1] ?? sheetKeys[0];
-  } else {
-    sheetKey = sheetKeys[0];
-  }
-
-  const sheet = workbook.Sheets[sheetKey];
-  if (!sheet) throw new Error(`Sheet "${sheetKey}" não encontrada`);
-
-  if (isServiceReport) {
-    const allArrays = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, raw: true, defval: null }) as unknown[][];
-    return allArrays.slice(5).map((row) => Object.fromEntries((row as unknown[]).map((v, i) => [String(i), v])));
-  }
-
-  return XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { raw: true, defval: null, range: isChamadas ? 3 : 0 });
 }
 
 export async function POST(req: NextRequest) {
@@ -80,10 +108,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Parâmetros inválidos' }, { status: 400 });
     }
 
-    // Read raw binary body
     const chunkBuffer = Buffer.from(await req.arrayBuffer());
 
-    // Duplicate check on first chunk
+    // Duplicate check on first chunk only
     if (chunkIndex === 0) {
       const { data: existing } = await supabase
         .from('upload_history')
@@ -95,7 +122,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Store chunk using service role (bypasses Storage RLS entirely)
+    // Store chunk — service role key bypasses Storage RLS
     const chunkPath = `chunks/${uploadToken}/chunk_${String(chunkIndex).padStart(4, '0')}`;
     const { error: storeErr } = await supabase.storage
       .from('temp-uploads')
@@ -105,12 +132,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: `Erro ao guardar chunk ${chunkIndex}: ${storeErr.message}` }, { status: 500 });
     }
 
-    // Not last chunk — acknowledge
     if (chunkIndex < totalChunks - 1) {
       return NextResponse.json({ status: 'chunk_received', chunkIndex });
     }
 
-    // Last chunk: download and assemble all chunks
+    // Last chunk: assemble all chunks
     const allChunks: Buffer[] = [];
     for (let i = 0; i < totalChunks; i++) {
       const path = `chunks/${uploadToken}/chunk_${String(i).padStart(4, '0')}`;
@@ -127,35 +153,32 @@ export async function POST(req: NextRequest) {
 
     const fullBuffer = Buffer.concat(allChunks);
 
-    // Clean up chunks (fire and forget)
+    // Cleanup chunks (fire and forget)
     const chunkPaths = Array.from({ length: totalChunks }, (_, i) =>
       `chunks/${uploadToken}/chunk_${String(i).padStart(4, '0')}`
     );
     supabase.storage.from('temp-uploads').remove(chunkPaths).catch(() => {});
 
-    // Validate buffer integrity (XLSX = ZIP, magic bytes PK)
+    // Validate XLSX magic bytes (ZIP = PK)
     if (fullBuffer.length < 100 || fullBuffer[0] !== 0x50 || fullBuffer[1] !== 0x4B) {
       return NextResponse.json({
-        error: `Buffer inválido após montagem. Tamanho: ${fullBuffer.length}b, início: ${fullBuffer.slice(0, 4).toString('hex')}`,
-        status: 'error',
+        error: `Buffer inválido. Tamanho: ${fullBuffer.length}b, início: ${fullBuffer.slice(0, 4).toString('hex')}`,
       }, { status: 500 });
     }
 
-    // Parse XLSX (tries /tmp file first, then buffer fallback)
+    // Parse with ExcelJS (streaming SAX parser — handles large files reliably)
     let rawData: Record<string, unknown>[];
     try {
-      rawData = parseXlsx(fullBuffer, filename);
+      rawData = await parseWithExcelJS(fullBuffer, filename);
     } catch (parseErr) {
       return NextResponse.json({
-        error: `Erro ao analisar XLSX: ${parseErr instanceof Error ? parseErr.message : String(parseErr)}`,
-        status: 'error',
+        error: `Erro ao analisar ficheiro: ${parseErr instanceof Error ? parseErr.message : String(parseErr)}`,
       }, { status: 500 });
     }
 
     if (rawData.length === 0) {
       return NextResponse.json({
-        error: `Ficheiro não contém dados. Verifica se o ficheiro está corrompido. Tamanho: ${fullBuffer.length}b`,
-        status: 'error',
+        error: `Ficheiro não contém dados. Tamanho: ${fullBuffer.length}b`,
       }, { status: 500 });
     }
 
