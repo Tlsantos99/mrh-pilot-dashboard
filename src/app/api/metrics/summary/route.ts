@@ -13,9 +13,10 @@ export async function GET(req: NextRequest) {
   try {
     const filters = readFilters(new URL(req.url).searchParams);
     const supabase = createServerClient();
-    const baseFilters = { ...filters, expertise: undefined };
+    // Cast to typeof filters so TypeScript keeps DashboardFilters assignability
+    const baseFilters = { ...filters, expertise: undefined } as typeof filters;
     // LT is always computed from closed cases — ignore status filter
-    const ltFilters = { ...filters, status: undefined };
+    const ltFilters = { ...filters, status: undefined } as typeof filters;
     const PAGE = 1000;
 
     const SEL = 'channel,has_expertise,lt_total,lt_opening_acceptance,closing_date,acceptance_date,opening_year,opening_week';
@@ -38,27 +39,48 @@ export async function GET(req: NextRequest) {
         .eq('branch', 'Riscos Múltiplos-Habitação')
         .not('closing_date', 'is', null);
 
+    // Paginate each dataset sequentially to avoid Promise.all tuple-inference issues
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    async function paginate(makeQuery: () => any, f: typeof filters): Promise<any[]> {
-      const all: any[] = []; // eslint-disable-line @typescript-eslint/no-explicit-any
+    const r: any[] = [];
+    {
       let off = 0;
       while (true) {
-        const { data, error } = await applyFilters(makeQuery(), f).range(off, off + PAGE - 1);
-        if (error) throw error;
-        all.push(...(data ?? []));
-        if (!data || data.length < PAGE) break;
+        const res = await applyFilters(makeQ(), filters).range(off, off + PAGE - 1);
+        if (res.error) throw res.error;
+        r.push(...(res.data ?? []));
+        if (!res.data || res.data.length < PAGE) break;
         off += PAGE;
       }
-      return all;
     }
 
-    const [r, rBase, rLT, refresh] = await Promise.all([
-      paginate(makeQ, filters),
-      paginate(makeQBase, baseFilters),
-      paginate(makeLtQ, ltFilters),
-      supabase.from('upload_history').select('file_type,upload_timestamp')
-        .eq('status', 'success').order('upload_timestamp', { ascending: false }).limit(10),
-    ]);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const rBase: any[] = [];
+    {
+      let off = 0;
+      while (true) {
+        const res = await applyFilters(makeQBase(), baseFilters).range(off, off + PAGE - 1);
+        if (res.error) throw res.error;
+        rBase.push(...(res.data ?? []));
+        if (!res.data || res.data.length < PAGE) break;
+        off += PAGE;
+      }
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const rLT: any[] = [];
+    {
+      let off = 0;
+      while (true) {
+        const res = await applyFilters(makeLtQ(), ltFilters).range(off, off + PAGE - 1);
+        if (res.error) throw res.error;
+        rLT.push(...(res.data ?? []));
+        if (!res.data || res.data.length < PAGE) break;
+        off += PAGE;
+      }
+    }
+
+    const refresh = await supabase.from('upload_history').select('file_type,upload_timestamp')
+      .eq('status', 'success').order('upload_timestamp', { ascending: false }).limit(10);
 
     const total_eligible = r.length;
     const total_novo = r.filter(x => x.channel === 'Formulário Novo').length;
