@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
     const supabase = createServerClient();
     const { data: uploads, error: uploadsErr } = await supabase
       .from('upload_history')
-      .select('upload_id, upload_timestamp')
+      .select('id, upload_timestamp')
       .eq('file_type', 'global')
       .eq('status', 'success')
       .order('upload_timestamp', { ascending: true });
@@ -36,11 +36,11 @@ export async function POST(req: NextRequest) {
     const errors: string[] = [];
     for (const u of uploads ?? []) {
       try {
-        const result = await transformOccurrences(u.upload_id);
+        const result = await transformOccurrences(u.id);
         totalProcessed += result.processed;
         totalSkipped += (result.skipped ?? 0);
       } catch (e) {
-        errors.push(`${u.upload_id}: ${e instanceof Error ? e.message : JSON.stringify(e)}`);
+        errors.push(`${u.id}: ${e instanceof Error ? e.message : JSON.stringify(e)}`);
       }
     }
 
