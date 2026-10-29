@@ -21,6 +21,8 @@ interface AntigoSet { [occurrenceId: string]: string } // occurrenceId -> upload
 export async function transformOccurrences(uploadId?: string, prebuiltScopedIds?: string[]) {
   const supabase = createServerClient();
 
+  const PAGE_SIZE = 1000;
+
   // 1. Load agent map
   const { data: agentRows } = await supabase
     .from('agents')
@@ -31,32 +33,41 @@ export async function transformOccurrences(uploadId?: string, prebuiltScopedIds?
     if (a.agent_code) agentMap[a.agent_code] = a;
   }
 
-  // 2. Load piloto occurrences set (Formulário Novo)
-  const { data: pilotoRows } = await supabase
-    .from('staging_piloto_agentes')
-    .select('occurrence_id, upload_id')
-    .not('occurrence_id', 'is', null);
-
+  // 2. Load piloto occurrences set (Formulário Novo) — paginate to bypass PostgREST row limit
   const pilotoSet: PilotoSet = {};
-  for (const r of pilotoRows ?? []) {
-    if (r.occurrence_id) pilotoSet[r.occurrence_id] = r.upload_id;
+  {
+    let off = 0;
+    while (true) {
+      const { data: page } = await supabase
+        .from('staging_piloto_agentes')
+        .select('occurrence_id, upload_id')
+        .not('occurrence_id', 'is', null)
+        .range(off, off + PAGE_SIZE - 1);
+      if (!page || page.length === 0) break;
+      for (const r of page) if (r.occurrence_id) pilotoSet[r.occurrence_id] = r.upload_id;
+      if (page.length < PAGE_SIZE) break;
+      off += PAGE_SIZE;
+    }
   }
 
-  // 3. Load antigo occurrences set (Formulário Antigo)
-  const { data: antigoRows } = await supabase
-    .from('staging_formulario_antigo')
-    .select('occurrence_id, upload_id')
-    .not('occurrence_id', 'is', null);
-
+  // 3. Load antigo occurrences set (Formulário Antigo) — paginate to bypass PostgREST row limit
   const antigoSet: AntigoSet = {};
-  for (const r of antigoRows ?? []) {
-    if (r.occurrence_id) antigoSet[r.occurrence_id] = r.upload_id;
+  {
+    let off = 0;
+    while (true) {
+      const { data: page } = await supabase
+        .from('staging_formulario_antigo')
+        .select('occurrence_id, upload_id')
+        .not('occurrence_id', 'is', null)
+        .range(off, off + PAGE_SIZE - 1);
+      if (!page || page.length === 0) break;
+      for (const r of page) if (r.occurrence_id) antigoSet[r.occurrence_id] = r.upload_id;
+      if (page.length < PAGE_SIZE) break;
+      off += PAGE_SIZE;
+    }
   }
 
   // 4. Aggregate staging_global by occurrence_id — paginate to avoid PostgREST row limit
-  // PostgREST caps responses at 1000 rows regardless of range size, so use PAGE_SIZE=1000
-  // and stop only when a page is empty (not when it's smaller than requested).
-  const PAGE_SIZE = 1000;
   // PostgREST .in() is sent as a URL parameter; > ~200 IDs exceeds URL length limits.
   const IN_CHUNK_SIZE = 200;
 
