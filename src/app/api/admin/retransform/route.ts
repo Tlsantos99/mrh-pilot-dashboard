@@ -29,23 +29,29 @@ export async function POST(req: NextRequest) {
       .eq('status', 'success')
       .order('upload_timestamp', { ascending: true });
 
-    if (uploadsErr) throw uploadsErr;
+    if (uploadsErr) throw new Error(uploadsErr.message ?? JSON.stringify(uploadsErr));
 
     let totalProcessed = 0;
     let totalSkipped = 0;
+    const errors: string[] = [];
     for (const u of uploads ?? []) {
-      const result = await transformOccurrences(u.upload_id);
-      totalProcessed += result.processed;
-      totalSkipped += result.skipped ?? 0;
+      try {
+        const result = await transformOccurrences(u.upload_id);
+        totalProcessed += result.processed;
+        totalSkipped += (result.skipped ?? 0);
+      } catch (e) {
+        errors.push(`${u.upload_id}: ${e instanceof Error ? e.message : JSON.stringify(e)}`);
+      }
     }
 
     return NextResponse.json({
-      ok: true,
+      ok: errors.length === 0,
       processed: totalProcessed,
       skipped: totalSkipped,
       uploads: (uploads ?? []).length,
+      errors: errors.length > 0 ? errors : undefined,
     });
   } catch (err) {
-    return NextResponse.json({ ok: false, error: String(err) }, { status: 500 });
+    return NextResponse.json({ ok: false, error: err instanceof Error ? err.message : JSON.stringify(err) }, { status: 500 });
   }
 }
