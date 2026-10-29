@@ -20,13 +20,17 @@ export async function GET(req: NextRequest) {
         .eq('eligible_for_pilot', true)
         .eq('branch', 'Riscos Múltiplos-Habitação');
 
-    const [{ data: p1, error: e1 }, { data: p2, error: e2 }] = await Promise.all([
-      applyFilters(makeQ(), filters).range(0, 999),
-      applyFilters(makeQ(), filters).range(1000, 1999),
-    ]);
-    if (e1) throw e1;
-    if (e2) throw e2;
-    const rows = [...(p1 ?? []), ...(p2 ?? [])];
+    const PAGE = 1000;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const rows: any[] = [];
+    let off = 0;
+    while (true) {
+      const { data, error } = await applyFilters(makeQ(), filters).range(off, off + PAGE - 1);
+      if (error) throw error;
+      rows.push(...(data ?? []));
+      if (!data || data.length < PAGE) break;
+      off += PAGE;
+    }
 
     // 7-day window ending at max_date (inclusive).
     // Without max_date, use the latest opening_date in the data so the window

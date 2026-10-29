@@ -38,24 +38,27 @@ export async function GET(req: NextRequest) {
         .eq('branch', 'Riscos Múltiplos-Habitação')
         .not('closing_date', 'is', null);
 
-    const [p1, p2, b1, b2, lt1, lt2, refresh] = await Promise.all([
-      applyFilters(makeQ(), filters).range(0, PAGE - 1),
-      applyFilters(makeQ(), filters).range(PAGE, PAGE * 2 - 1),
-      applyFilters(makeQBase(), baseFilters).range(0, PAGE - 1),
-      applyFilters(makeQBase(), baseFilters).range(PAGE, PAGE * 2 - 1),
-      applyFilters(makeLtQ(), ltFilters).range(0, PAGE - 1),
-      applyFilters(makeLtQ(), ltFilters).range(PAGE, PAGE * 2 - 1),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    async function paginate(makeQuery: () => any, f: typeof filters): Promise<any[]> {
+      const all: any[] = []; // eslint-disable-line @typescript-eslint/no-explicit-any
+      let off = 0;
+      while (true) {
+        const { data, error } = await applyFilters(makeQuery(), f).range(off, off + PAGE - 1);
+        if (error) throw error;
+        all.push(...(data ?? []));
+        if (!data || data.length < PAGE) break;
+        off += PAGE;
+      }
+      return all;
+    }
+
+    const [r, rBase, rLT, refresh] = await Promise.all([
+      paginate(makeQ, filters),
+      paginate(makeQBase, baseFilters),
+      paginate(makeLtQ, ltFilters),
       supabase.from('upload_history').select('file_type,upload_timestamp')
         .eq('status', 'success').order('upload_timestamp', { ascending: false }).limit(10),
     ]);
-
-    if (p1.error) throw p1.error;
-    if (p2.error) throw p2.error;
-
-    const r = [...(p1.data ?? []), ...(p2.data ?? [])];
-    const rBase = [...(b1.data ?? []), ...(b2.data ?? [])];
-    // rLT: always closed cases, ignores status filter — source of truth for all LT KPIs
-    const rLT = [...(lt1.data ?? []), ...(lt2.data ?? [])];
 
     const total_eligible = r.length;
     const total_novo = r.filter(x => x.channel === 'Formulário Novo').length;

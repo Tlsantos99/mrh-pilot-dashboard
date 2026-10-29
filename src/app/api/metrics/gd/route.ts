@@ -17,13 +17,17 @@ export async function GET(req: NextRequest) {
         .not('opening_week_label', 'is', null)
         .in('channel', ['Formulário Novo', 'Formulário Antigo']);
 
-    const [{ data: p1, error: e1 }, { data: p2, error: e2 }] = await Promise.all([
-      applyFilters(makeQ(), filters).range(0, 999),
-      applyFilters(makeQ(), filters).range(1000, 1999),
-    ]);
-    if (e1) throw e1;
-    if (e2) throw e2;
-    const rows = [...(p1 ?? []), ...(p2 ?? [])];
+    const PAGE = 1000;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const rows: any[] = [];
+    let off = 0;
+    while (true) {
+      const { data, error } = await applyFilters(makeQ(), filters).range(off, off + PAGE - 1);
+      if (error) throw error;
+      rows.push(...(data ?? []));
+      if (!data || data.length < PAGE) break;
+      off += PAGE;
+    }
 
     type Acc = { year: number; week: number; week_label: string; channel: string; total: number; gd_count: number };
     const map = new Map<string, Acc>();
