@@ -11,22 +11,24 @@ function isoWeek(dateStr: string): { year: number; week: number } {
   return { year: d.getFullYear(), week: wk };
 }
 
-// Hard-coded weekly call data from Service Performance Report (Jul-Sep 2026)
+// Hard-coded weekly call data from Service Performance Report (W28-W43 2026)
 const WEEKLY_DATA = [
-  { year: 2026, week: 28, week_label: '2026-W28', total_calls: 4,  within_hours: 4,  outside_hours: 0, answered: 4,  abandoned: 0, answer_rate_within_hours: 100.0, avg_duration_minutes: 2.9  },
-  { year: 2026, week: 29, week_label: '2026-W29', total_calls: 29, within_hours: 29, outside_hours: 0, answered: 27, abandoned: 2, answer_rate_within_hours: 93.1,  avg_duration_minutes: 12.8 },
-  { year: 2026, week: 30, week_label: '2026-W30', total_calls: 40, within_hours: 40, outside_hours: 0, answered: 36, abandoned: 4, answer_rate_within_hours: 90.0,  avg_duration_minutes: 9.6  },
-  { year: 2026, week: 31, week_label: '2026-W31', total_calls: 48, within_hours: 48, outside_hours: 0, answered: 43, abandoned: 5, answer_rate_within_hours: 89.6,  avg_duration_minutes: 10.4 },
-  { year: 2026, week: 32, week_label: '2026-W32', total_calls: 38, within_hours: 38, outside_hours: 0, answered: 36, abandoned: 2, answer_rate_within_hours: 94.7,  avg_duration_minutes: 9.3  },
-  { year: 2026, week: 33, week_label: '2026-W33', total_calls: 42, within_hours: 42, outside_hours: 0, answered: 41, abandoned: 1, answer_rate_within_hours: 97.6,  avg_duration_minutes: 7.2  },
-  { year: 2026, week: 34, week_label: '2026-W34', total_calls: 33, within_hours: 33, outside_hours: 0, answered: 30, abandoned: 3, answer_rate_within_hours: 90.9,  avg_duration_minutes: 8.5  },
-  { year: 2026, week: 35, week_label: '2026-W35', total_calls: 40, within_hours: 40, outside_hours: 0, answered: 37, abandoned: 3, answer_rate_within_hours: 92.5,  avg_duration_minutes: 7.5  },
-  { year: 2026, week: 36, week_label: '2026-W36', total_calls: 30, within_hours: 30, outside_hours: 0, answered: 29, abandoned: 1, answer_rate_within_hours: 96.7,  avg_duration_minutes: 10.8 },
-  { year: 2026, week: 37, week_label: '2026-W37', total_calls: 29, within_hours: 29, outside_hours: 0, answered: 28, abandoned: 1, answer_rate_within_hours: 96.6,  avg_duration_minutes: 7.6  },
-  { year: 2026, week: 38, week_label: '2026-W38', total_calls: 81, within_hours: 81, outside_hours: 0, answered: 77, abandoned: 5, answer_rate_within_hours: 95.1,  avg_duration_minutes: 9.0  },
-  { year: 2026, week: 39, week_label: '2026-W39', total_calls: 87, within_hours: 87, outside_hours: 0, answered: 84, abandoned: 5, answer_rate_within_hours: 96.6,  avg_duration_minutes: 9.0  },
-  { year: 2026, week: 40, week_label: '2026-W40', total_calls: 69, within_hours: 69, outside_hours: 0, answered: 67, abandoned: 2, answer_rate_within_hours: 97.1,  avg_duration_minutes: 9.0  },
-  { year: 2026, week: 41, week_label: '2026-W41', total_calls: 65, within_hours: 65, outside_hours: 0, answered: 63, abandoned: 2, answer_rate_within_hours: 96.9,  avg_duration_minutes: 9.0  },
+  { year: 2026, week: 28, week_label: '2026-W28', total_calls: 4,   within_hours: 4,   outside_hours: 0, answered: 4,   abandoned: 0, answer_rate_within_hours: 100.0, avg_duration_minutes: 2.9  },
+  { year: 2026, week: 29, week_label: '2026-W29', total_calls: 29,  within_hours: 29,  outside_hours: 0, answered: 27,  abandoned: 2, answer_rate_within_hours: 93.1,  avg_duration_minutes: 12.8 },
+  { year: 2026, week: 30, week_label: '2026-W30', total_calls: 40,  within_hours: 40,  outside_hours: 0, answered: 36,  abandoned: 4, answer_rate_within_hours: 90.0,  avg_duration_minutes: 9.6  },
+  { year: 2026, week: 31, week_label: '2026-W31', total_calls: 48,  within_hours: 48,  outside_hours: 0, answered: 43,  abandoned: 5, answer_rate_within_hours: 89.6,  avg_duration_minutes: 10.4 },
+  { year: 2026, week: 32, week_label: '2026-W32', total_calls: 38,  within_hours: 38,  outside_hours: 0, answered: 36,  abandoned: 2, answer_rate_within_hours: 94.7,  avg_duration_minutes: 9.3  },
+  { year: 2026, week: 33, week_label: '2026-W33', total_calls: 42,  within_hours: 42,  outside_hours: 0, answered: 41,  abandoned: 1, answer_rate_within_hours: 97.6,  avg_duration_minutes: 7.2  },
+  { year: 2026, week: 34, week_label: '2026-W34', total_calls: 33,  within_hours: 33,  outside_hours: 0, answered: 30,  abandoned: 3, answer_rate_within_hours: 90.9,  avg_duration_minutes: 8.5  },
+  { year: 2026, week: 35, week_label: '2026-W35', total_calls: 40,  within_hours: 40,  outside_hours: 0, answered: 37,  abandoned: 3, answer_rate_within_hours: 92.5,  avg_duration_minutes: 7.6  },
+  { year: 2026, week: 36, week_label: '2026-W36', total_calls: 30,  within_hours: 30,  outside_hours: 0, answered: 29,  abandoned: 1, answer_rate_within_hours: 96.7,  avg_duration_minutes: 10.3 },
+  { year: 2026, week: 37, week_label: '2026-W37', total_calls: 29,  within_hours: 29,  outside_hours: 0, answered: 28,  abandoned: 1, answer_rate_within_hours: 96.6,  avg_duration_minutes: 7.9  },
+  { year: 2026, week: 38, week_label: '2026-W38', total_calls: 80,  within_hours: 80,  outside_hours: 0, answered: 76,  abandoned: 5, answer_rate_within_hours: 95.0,  avg_duration_minutes: 8.6  },
+  { year: 2026, week: 39, week_label: '2026-W39', total_calls: 85,  within_hours: 85,  outside_hours: 0, answered: 82,  abandoned: 4, answer_rate_within_hours: 96.5,  avg_duration_minutes: 9.0  },
+  { year: 2026, week: 40, week_label: '2026-W40', total_calls: 69,  within_hours: 69,  outside_hours: 0, answered: 67,  abandoned: 2, answer_rate_within_hours: 97.1,  avg_duration_minutes: 7.7  },
+  { year: 2026, week: 41, week_label: '2026-W41', total_calls: 57,  within_hours: 57,  outside_hours: 0, answered: 55,  abandoned: 2, answer_rate_within_hours: 96.5,  avg_duration_minutes: 9.9  },
+  { year: 2026, week: 42, week_label: '2026-W42', total_calls: 60,  within_hours: 60,  outside_hours: 0, answered: 59,  abandoned: 1, answer_rate_within_hours: 98.3,  avg_duration_minutes: 11.4 },
+  { year: 2026, week: 43, week_label: '2026-W43', total_calls: 125, within_hours: 125, outside_hours: 0, answered: 121, abandoned: 5, answer_rate_within_hours: 96.8,  avg_duration_minutes: 9.8  },
 ];
 
 const TOTAL_OUTSIDE_HOURS = 10;
