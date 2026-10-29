@@ -118,19 +118,20 @@ export async function transformOccurrences(uploadId?: string, prebuiltScopedIds?
       }
     }
   } else if (!scopedOccurrenceIds) {
-    // Full unscoped transform — paginate without filter
-    let from = 0;
+    // Full unscoped transform — cursor-based pagination via id to avoid OFFSET slowdown on 300K+ rows
+    let lastId = 0;
     while (true) {
       const { data: page, error: pageErr } = await supabase
         .from('staging_global')
         .select('*')
-        .order('occurrence_id')
-        .order('process_number')
-        .range(from, from + PAGE_SIZE - 1);
+        .gt('id', lastId)
+        .order('id')
+        .limit(PAGE_SIZE);
       if (pageErr) throw new Error(`staging_global page error: ${pageErr.message}`);
       if (!page || page.length === 0) break;
       globalRows.push(...page);
-      from += PAGE_SIZE;
+      lastId = (page[page.length - 1] as { id: number }).id;
+      if (page.length < PAGE_SIZE) break;
     }
   }
 
